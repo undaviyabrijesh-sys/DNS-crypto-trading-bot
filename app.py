@@ -3,11 +3,11 @@ from __future__ import annotations
 import streamlit as st
 import plotly.graph_objects as go
 
-from dns_bot.data import fetch_ohlcv
+from dns_bot.data import fetch_ohlcv\nfrom dns_bot.delta_data import fetch_delta_history
 from dns_bot.zones import detect_fvg_zones, detect_base_leg_zones
 from dns_bot.journal import load_trades, learning_report
 
-st.set_page_config(page_title="DNS Trader", layout="wide")
+def _tf_minutes(value):\n    return int(value[:-1]) if value.endswith("m") else int(value[:-1]) * 60 if value.endswith("h") else 1440\n\nst.set_page_config(page_title="DNS Trader", layout="wide")
 st.title("DNS Trader")
 st.caption("BTC / ETH • Supply & Demand research desk • Public market data • Paper-only")
 
@@ -16,7 +16,7 @@ market_tab, journal_tab = st.tabs(["Market desk", "Trade journal & learning"])
 with market_tab:
     with st.sidebar:
         st.header("Market")
-        exchange_id = st.selectbox("Exchange", ["okx", "bybit", "binance"], index=0)
+        exchange_id = st.selectbox("Exchange", ["Delta India", "okx", "bybit", "binance"], index=0)
         symbol = st.selectbox("Pair", ["BTC/USDT", "ETH/USDT"])
         timeframe = st.selectbox("Timeframe", ["1m", "3m", "5m", "15m", "1h", "4h"], index=3)
         limit = st.slider("Candles", 100, 1000, 500, 50)
@@ -25,7 +25,7 @@ with market_tab:
 
     if "candles" not in st.session_state or refresh:
         try:
-            st.session_state.candles = fetch_ohlcv(exchange_id, symbol, timeframe, limit)
+            if exchange_id == "Delta India":\n            st.session_state.candles = fetch_delta_history("BTCUSD" if symbol == "BTC/USDT" else "ETHUSD", timeframe, days=max(1, int(limit * _tf_minutes(timeframe) / 1440)))\n        else:\n            st.session_state.candles = fetch_ohlcv(exchange_id, symbol, timeframe, limit)
             st.session_state.load_error = None
         except Exception as exc:
             st.session_state.load_error = str(exc)
