@@ -71,3 +71,29 @@ def test_supply_break_creates_rbs_flip():
     assert result[0].status == "broken"
     assert result[1].kind == "demand"
     assert result[1].pattern == "RBS"
+
+
+def test_swing_high_uses_full_origin_candle_and_confirmation_time():
+    rows = []
+    for i in range(20):
+        price = 100.0 + (0.15 if i % 2 else -0.15)
+        rows.append({
+            "timestamp": pd.Timestamp("2026-01-01", tz="UTC") + pd.Timedelta(minutes=15 * i),
+            "open": price,
+            "high": price + 1.0,
+            "low": price - 1.0,
+            "close": price + (0.1 if i % 2 else -0.1),
+        })
+    # A clear swing high followed by a three-candle displacement.
+    rows[10] = {"timestamp": rows[10]["timestamp"], "open": 119.0,
+                "high": 121.0, "low": 118.0, "close": 120.0}
+    for i, close in zip((11, 12, 13), (116.0, 113.0, 110.0)):
+        rows[i] = {"timestamp": rows[i]["timestamp"], "open": close + 1.0,
+                   "high": close + 2.0, "low": close - 1.0, "close": close}
+    zones = detect_base_leg_zones(pd.DataFrame(rows))
+    swing = [z for z in zones if z.pattern == "SWING_HIGH"]
+    assert swing
+    assert swing[0].proximal == 118.0
+    assert swing[0].distal == 121.0
+    assert swing[0].created_index == 13
+    assert swing[0].created_at == str(rows[13]["timestamp"])
