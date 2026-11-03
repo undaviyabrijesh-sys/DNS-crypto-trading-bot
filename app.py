@@ -17,7 +17,7 @@ with market_tab:
     with st.sidebar:
         st.header("Market")
         exchange_id = st.selectbox("Exchange", ["Delta India", "okx", "bybit", "binance"], index=0)
-        symbol = st.selectbox("Pair", ["BTC/USDT", "ETH/USDT"])
+        symbol = st.selectbox("Pair", ["BTCUSD", "ETHUSD"] if exchange_id == "Delta India" else ["BTC/USDT", "ETH/USDT"])
         timeframe = st.selectbox("Timeframe", ["1m", "3m", "5m", "15m", "1h", "4h"], index=3)
         limit = st.slider("Candles", 100, 1000, 500, 50)
         detector = st.selectbox("Zone detector", ["Both", "FVG", "Base / Leg"])
@@ -25,7 +25,7 @@ with market_tab:
 
     if "candles" not in st.session_state or refresh:
         try:
-            if exchange_id == "Delta India":\n            st.session_state.candles = fetch_delta_history("BTCUSD" if symbol == "BTC/USDT" else "ETHUSD", timeframe, days=max(1, int(limit * _tf_minutes(timeframe) / 1440)))\n        else:\n            st.session_state.candles = fetch_ohlcv(exchange_id, symbol, timeframe, limit)
+            if exchange_id == "Delta India":\n            st.session_state.candles = fetch_delta_history(symbol, timeframe, days=max(1, int(limit * _tf_minutes(timeframe) / 1440)))\n        else:\n            st.session_state.candles = fetch_ohlcv(exchange_id, symbol, timeframe, limit)
             st.session_state.load_error = None
         except Exception as exc:
             st.session_state.load_error = str(exc)
