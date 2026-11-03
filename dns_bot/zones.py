@@ -89,6 +89,10 @@ def detect_base_leg_zones(
             if not all(_body_ratio(row) <= base_body_ratio for _, row in base.iterrows()):
                 continue
             leg_in, leg_out = df.iloc[start - 1], df.iloc[leg_out_idx]
+            # The ebook defines leg-in as a directional leg candle too;
+            # unlike leg-out, it need not be range-expanded.
+            if _body_ratio(leg_in) < leg_body_ratio:
+                continue
             out_range = float(ranges.iloc[leg_out_idx])
             median = median_ranges.iloc[leg_out_idx]
             if pd.isna(median) or out_range < float(median) * expansion:
