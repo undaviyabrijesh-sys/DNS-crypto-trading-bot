@@ -43,11 +43,15 @@ def detect_fvg_zones(df: pd.DataFrame) -> list[Zone]:
     for i in range(2, len(df)):
         first, third = df.iloc[i - 2], df.iloc[i]
         stamp = str(df.iloc[i].get("timestamp", i))
+        # A fair-value gap is the untraded space BETWEEN candle 1 and
+        # candle 3, not the full range of candle 1.
         if float(third["low"]) > float(first["high"]):
-            zones.append(Zone("demand", "fvg", float(first["high"]), float(first["low"]),
+            # Bullish FVG: bottom = first candle high, top = third candle low.
+            zones.append(Zone("demand", "fvg", float(third["low"]), float(first["high"]),
                               stamp, i - 2, i - 2, 1.0, "FVG", created_index=i))
         elif float(third["high"]) < float(first["low"]):
-            zones.append(Zone("supply", "fvg", float(first["low"]), float(first["high"]),
+            # Bearish FVG: bottom = third candle high, top = first candle low.
+            zones.append(Zone("supply", "fvg", float(third["high"]), float(first["low"]),
                               stamp, i - 2, i - 2, 1.0, "FVG", created_index=i))
     return zones
 
