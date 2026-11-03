@@ -19,6 +19,8 @@ from dns_bot.delta_data import fetch_delta_history
 from dns_bot.delta_market import fetch_ticker, fetch_orderbook, fetch_recent_trades
 from dns_bot.zones import detect_base_leg_zones, track_zone_lifecycle
 from dns_bot.entries import find_entry_setups
+from dns_bot.structure import detect_market_structure
+from dns_bot.scenarios import generate_trade_scenarios
 from dns_bot.journal import load_trades, learning_report
 
 
@@ -86,7 +88,8 @@ def get_zones(df: pd.DataFrame, engine: str = "Base / Leg"):
 
 def build_chart(df: pd.DataFrame, zones: list, show_volume: bool = True,
                 chart_style: str = "Candles", indicators: list[str] | None = None,
-                show_zones: bool = True):
+                show_zones: bool = True, structure_events: list | None = None,
+                scenarios: list | None = None, candle_seconds: int = 900):
     """TradingView-inspired interactive chart with editable drawing tools."""
     rows = 2 if show_volume else 1
     heights = [0.80, 0.20] if show_volume else [1]
@@ -151,6 +154,77 @@ def build_chart(df: pd.DataFrame, zones: list, show_volume: bool = True,
                 yanchor="bottom" if demand else "top",
                 font=dict(size=8, color=edge), bgcolor="rgba(11,14,17,.72)",
             )
+
+    # Confirmed structure labels are plotted only when their confirmation candle closes.
+    if structure_events:
+        visible_events = structure_events[-18:]
+        for event in visible_events:
+            x = df.timestamp.iloc[min(max(int(event.index), 0), len(df) - 1)]
+            if event.event == "SWING_HIGH":
+                fig.add_trace(go.Scatter(
+                    x=[x], y=[event.level], mode="markers+text",
+                    marker=dict(symbol="triangle-down", size=9, color="#f6465d"),
+                    text=["SH"], textposition="top center",
+                    textfont=dict(size=8, color="#f6465d"),
+                    name="Confirmed swing high", showlegend=False,
+                    hovertemplate="Confirmed swing high<br>Level: %{y:,.2f}<extra></extra>",
+                ), row=1, col=1)
+            elif event.event == "SWING_LOW":
+                fig.add_trace(go.Scatter(
+                    x=[x], y=[event.level], mode="markers+text",
+                    marker=dict(symbol="triangle-up", size=9, color="#0ecb81"),
+                    text=["SL"], textposition="bottom center",
+                    textfont=dict(size=8, color="#0ecb81"),
+                    name="Confirmed swing low", showlegend=False,
+                    hovertemplate="Confirmed swing low<br>Level: %{y:,.2f}<extra></extra>",
+                ), row=1, col=1)
+            else:
+                bullish = event.direction == "bullish"
+                color = "#0ecb81" if bullish else "#f6465d"
+                fig.add_annotation(
+                    x=x, y=event.level, xref="x", yref="y",
+                    text=event.event, showarrow=True, arrowhead=2,
+                    arrowcolor=color, font=dict(size=9, color=color),
+                    bgcolor="rgba(11,14,17,.88)", bordercolor=color,
+                    ax=0, ay=-28 if bullish else 28,
+                )
+
+    # Conditional plans extend into future chart space; these are not live signals.
+    if scenarios:
+        future_x = df.timestamp.iloc[-1] + pd.Timedelta(seconds=candle_seconds * 20)
+        for scenario in scenarios:
+            bullish = scenario.side == "LONG"
+            color = "rgba(14,203,129,.14)" if bullish else "rgba(246,70,93,.14)"
+            edge = "#0ecb81" if bullish else "#f6465d"
+            fig.add_shape(
+                type="rect", x0=df.timestamp.iloc[-1], x1=future_x,
+                y0=scenario.zone_low, y1=scenario.zone_high,
+                xref="x", yref="y", fillcolor=color,
+                line=dict(color=edge, width=1, dash="dot"), layer="above",
+            )
+            fig.add_annotation(
+                x=future_x, y=(scenario.zone_low + scenario.zone_high) / 2,
+                xref="x", yref="y", text=f"{scenario.side} WATCH · {scenario.zone_pattern}",
+                showarrow=False, xanchor="right",
+                font=dict(size=9, color=edge), bgcolor="rgba(11,14,17,.85)",
+            )
+            for label, level, dash in [("SL", scenario.stop, "dash")]:
+                fig.add_shape(type="line", x0=df.timestamp.iloc[-1], x1=future_x,
+                              y0=level, y1=level, xref="x", yref="y",
+                              line=dict(color="#f6465d", width=1, dash=dash))
+                fig.add_annotation(x=future_x, y=level, xref="x", yref="y",
+                                   text=f"{label} {level:,.1f}", showarrow=False,
+                                   xanchor="right", yshift=9,
+                                   font=dict(size=8, color="#f6465d"))
+            for target_no, level in enumerate(scenario.targets[:3], start=1):
+                fig.add_shape(type="line", x0=df.timestamp.iloc[-1], x1=future_x,
+                              y0=level, y1=level, xref="x", yref="y",
+                              line=dict(color="#0ecb81" if bullish else "#f0b90b",
+                                        width=1, dash="dot"))
+                fig.add_annotation(x=future_x, y=level, xref="x", yref="y",
+                                   text=f"T{target_no} {level:,.1f}", showarrow=False,
+                                   xanchor="right", yshift=9,
+                                   font=dict(size=8, color="#0ecb81" if bullish else "#f0b90b"))
 
     last = float(df.close.iloc[-1])
     fig.add_hline(y=last, line_dash="dot", line_color="#00c2ff", line_width=1,
@@ -265,7 +339,7 @@ if df is not None and not df.empty:
         st.caption(f"ZONE ENGINE · MAJOR SWING FILTER v2 · {len(zones)} zones detected · refresh clears zone cache")
         st.markdown('<div class="small-label">PRICE CHART · TRADINGVIEW-STYLE WORKSPACE</div>',
                     unsafe_allow_html=True)
-        tool1, tool2, tool3 = st.columns([1.0, 1.5, 1.0])
+        tool1, tool2, tool3, tool4, tool5 = st.columns([1.0, 1.5, 1.0, 1.0, 1.0])
         with tool1:
             chart_style = st.selectbox("CHART TYPE", ["Candles", "Line", "Area"],
                                        index=0, key="chart-style")
@@ -274,6 +348,10 @@ if df is not None and not df.empty:
                                         default=["EMA 20", "EMA 50"], key="chart-indicators")
         with tool3:
             show_chart_zones = st.toggle("Show zones", value=True, key="chart-zones")
+        with tool4:
+            show_structure = st.toggle("BOS / CHoCH", value=True, key="chart-structure")
+        with tool5:
+            show_scenarios = st.toggle("Trade plans", value=True, key="chart-scenarios")
         # Keep more historical structure visible. Rank by displacement/defended
         # quality first, then proximity to current price; do not let recency alone
         # hide a major origin zone such as the manually marked ~79k area.
@@ -289,8 +367,13 @@ if df is not None and not df.empty:
                 ),
                 reverse=True
             )[:10])
+        structure_events = detect_market_structure(df) if show_structure else []
+        trade_scenarios = generate_trade_scenarios(last_price, zones) if show_scenarios else []
+        seconds_per_candle = timeframe_minutes(timeframe) * 60
         st.plotly_chart(
-            build_chart(df, chart_zones, show_volume, chart_style, indicators, show_chart_zones),
+            build_chart(df, chart_zones, show_volume, chart_style, indicators,
+                        show_chart_zones, structure_events, trade_scenarios,
+                        seconds_per_candle),
             use_container_width=True,
             config={
                 "displaylogo": False, "scrollZoom": True, "doubleClick": "reset",
@@ -333,7 +416,7 @@ if df is not None and not df.empty:
         else:
             st.caption("No recent trade prints returned.")
 
-    lower_tabs = st.tabs(["ZONE WATCHLIST", "TRADE TICKET", "MARKET DATA", "TRADE JOURNAL", "SYSTEM", "ENTRY MODULE"])
+    lower_tabs = st.tabs(["ZONE WATCHLIST", "TRADE TICKET", "MARKET DATA", "TRADE JOURNAL", "SYSTEM", "ENTRY MODULE", "STRUCTURE & PLANS"])
     with lower_tabs[0]:
         st.markdown("**Detected supply and demand areas**")
         if zones:
@@ -452,6 +535,39 @@ if df is not None and not df.empty:
         if market_errors:
             for error in market_errors:
                 st.caption(error)
+
+    with lower_tabs[6]:
+        st.markdown("**Confirmed market structure · conditional trade plans**")
+        st.caption("Swing labels appear only after right-side confirmation candles close. BOS/CHoCH requires a candle close through a confirmed swing.")
+        if structure_events:
+            event_rows = [{
+                "CONFIRMED AT": event.timestamp,
+                "EVENT": event.event,
+                "DIRECTION": event.direction.upper(),
+                "LEVEL": round(float(event.level), 2),
+                "PIVOT INDEX": event.pivot_index,
+                "CONFIRM INDEX": event.index,
+            } for event in structure_events[-40:]]
+            st.dataframe(event_rows, use_container_width=True, hide_index=True)
+        else:
+            st.info("No confirmed structure events in the loaded chart window.")
+        st.markdown("##### Conditional scenarios")
+        if trade_scenarios:
+            scenario_rows = [{
+                "SIDE": item.side,
+                "ZONE": item.zone_pattern,
+                "ENTRY BAND": f"{item.entry_low:,.2f} – {item.entry_high:,.2f}",
+                "STOP": round(item.stop, 2),
+                "TARGETS": " / ".join(f"{x:,.2f}" for x in item.targets) or "No opposing zone found",
+                "R:R": " / ".join(f"{x:.2f}R" for x in item.risk_reward) or "—",
+                "STATUS": item.status,
+                "TRIGGER": item.trigger,
+                "INVALIDATION": item.invalidation,
+            } for item in trade_scenarios]
+            st.dataframe(scenario_rows, use_container_width=True, hide_index=True)
+        else:
+            st.info("No valid active demand below or supply above the current price. No forced trade plan.")
+        st.warning("Research-only conditional levels. Wait for the stated candle-close confirmation; no order is sent.")
 
     with lower_tabs[5]:
         st.markdown("**15m zone / 3m confirmation / paper signal only**")
