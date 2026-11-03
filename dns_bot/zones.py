@@ -178,7 +178,7 @@ def detect_base_leg_zones(df: pd.DataFrame, max_base: int = 6, range_lookback: i
             if departure >= float(median) * 1.5:
                 strength = min(1.0, departure / max(float(median) * 4.0, 1e-12))
                 zones.append(Zone(
-                    "supply", "base_leg", pivot_high, pivot_low, stamp,
+                    "supply", "base_leg", pivot_low, pivot_high, stamp,
                     pivot, pivot, strength, "SWING_HIGH",
                     created_index=confirm_index,
                 ))
