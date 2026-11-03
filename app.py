@@ -1,5 +1,15 @@
 from __future__ import annotations
 
+# Streamlit Cloud can launch the entrypoint from a working directory that does
+# not reliably expose the repository root as an import path. Add it explicitly
+# before importing the local dns_bot package.
+import sys
+from pathlib import Path
+
+APP_ROOT = Path(__file__).resolve().parent
+if str(APP_ROOT) not in sys.path:
+    sys.path.insert(0, str(APP_ROOT))
+
 import pandas as pd
 import plotly.graph_objects as go
 from plotly.subplots import make_subplots
