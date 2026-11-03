@@ -1,0 +1,38 @@
+name: DNS historical backtest
+on:
+  push:
+    paths:
+      - "dns_bot/**"
+      - "requirements.txt"
+      - ".github/workflows/backtest.yml"
+  workflow_dispatch:
+    inputs:
+      symbol:
+        description: "CCXT market symbol"
+        required: true
+        default: "BTC/USDT"
+      days:
+        description: "History window in days"
+        required: true
+        default: "365"
+jobs:
+  backtest:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - run: pip install -r requirements.txt
+      - name: Run BTC backtest
+        if: ${{ github.event_name == 'push' }}
+        run: PYTHONPATH=. python -m dns_bot.backtest --symbol BTC/USDT --timeframe 15m --days 365
+      - name: Run requested backtest
+        if: ${{ github.event_name == 'workflow_dispatch' }}
+        run: PYTHONPATH=. python -m dns_bot.backtest --symbol "${{ inputs.symbol }}" --timeframe 15m --days "${{ inputs.days }}"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: dns-backtest-results
+          path: backtest_results/
+          retention-days: 30
