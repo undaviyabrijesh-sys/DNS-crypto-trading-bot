@@ -143,7 +143,7 @@ def _track_one_zone(df: pd.DataFrame, zone: Zone, start_index: int) -> tuple[Zon
     zone.touches = touches
     zone.defended_retests = defended
     # Only defended reactions increase score; an unreacted touch adds nothing.
-    zone.score = round(min(1.0, max(0.0, float(zone.strength)) * 0.70
+    zone.score = round(min(1.0, max(0.0, float(zone.strength)) * 0.90
                            + min(defended, 3) * 0.10), 4)
     if broken_at is not None:
         zone.status = "broken"
