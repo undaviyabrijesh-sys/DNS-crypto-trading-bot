@@ -126,6 +126,8 @@ def run_backtest(
     min_score: int = 50,
     max_bars_in_trade: int = 96,
     max_zone_touches: int = 1,
+    require_curve: bool = True,
+    require_trend: bool = True,
 ) -> tuple[pd.DataFrame, dict]:
     """Causal, one-position-at-a-time OHLC backtest.
 
@@ -255,7 +257,11 @@ def run_backtest(
                 trend_ok = aligned or (
                     zone.pattern in ("DBR", "RBD") and score >= min_score + 15
                 )
-                if score >= min_score and in_curve and trend_ok:
+                # Permissive research mode can relax context filters, but never
+                # relaxes the causal retest/close-confirmation/next-open entry.
+                curve_ok = in_curve or not require_curve
+                trend_filter_ok = trend_ok or not require_trend
+                if score >= min_score and curve_ok and trend_filter_ok:
                     pending = {"side": side, "stop": stop, "zone": zone, "score": score,
                                "aligned": aligned, "touch_number": state["touches"]}
                 state["touch_idx"] = None
@@ -306,15 +312,21 @@ def main():
     candles.to_csv(out / "candles.csv", index=False)
 
     variants = {
-        "strict_3R": {"target_r": 3.0, "min_score": args.min_score + 10},
-        "balanced_2R": {"target_r": 2.0, "min_score": args.min_score},
-        "looser_2R": {"target_r": 2.0, "min_score": max(0, args.min_score - 20)},
+        "strict_3R": {"target_r": 3.0, "min_score": args.min_score + 10,
+                      "require_curve": True, "require_trend": True, "max_zone_touches": 1},
+        "balanced_2R": {"target_r": 2.0, "min_score": args.min_score,
+                        "require_curve": True, "require_trend": True, "max_zone_touches": 1},
+        "looser_2R": {"target_r": 2.0, "min_score": max(0, args.min_score - 20),
+                      "require_curve": False, "require_trend": False, "max_zone_touches": 2},
+        "imperfect_2R": {"target_r": 2.0, "min_score": 25,
+                         "require_curve": False, "require_trend": False, "max_zone_touches": 2},
     }
     comparison = {}
     for name, config in variants.items():
         trades, metrics = run_backtest(
             candles, symbol=args.symbol, min_score=config["min_score"],
-            target_r=config["target_r"]
+            target_r=config["target_r"], require_curve=config["require_curve"],
+            require_trend=config["require_trend"], max_zone_touches=config["max_zone_touches"]
         )
         trades.to_csv(out / f"{name}_trades.csv", index=False)
         comparison[name] = metrics
