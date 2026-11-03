@@ -289,7 +289,7 @@ def run_backtest(
 
 def main():
     parser = argparse.ArgumentParser()
-    parser.add_argument("--exchange", default="binance")
+    parser.add_argument("--exchange", default="okx")
     parser.add_argument("--symbol", default="BTC/USDT")
     parser.add_argument("--timeframe", default="15m")
     parser.add_argument("--days", type=int, default=365)
