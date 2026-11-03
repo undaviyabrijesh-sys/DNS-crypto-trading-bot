@@ -242,11 +242,17 @@ if df is not None and not df.empty:
                                         default=["EMA 20", "EMA 50"], key="chart-indicators")
         with tool3:
             show_chart_zones = st.toggle("Show zones", value=True, key="chart-zones")
-        # Keep the full zone list in the watchlist, but draw only the strongest 24
-        # on the chart to avoid hundreds of Plotly layout shapes slowing the browser.
-        chart_zones = sorted(
-            zones, key=lambda z: (float(z.strength), str(z.created_at)), reverse=True
-        )[:24]
+        # Keep every detected zone in the watchlist. On the chart, show only
+        # the three strongest individual demand zones and three strongest supply
+        # zones. Do not merge zones: selection only reduces visual clutter.
+        chart_zones = []
+        for side in ("demand", "supply"):
+            side_zones = [z for z in zones if str(z.kind).lower() == side]
+            chart_zones.extend(sorted(
+                side_zones,
+                key=lambda z: (float(z.strength), str(z.created_at)),
+                reverse=True
+            )[:3])
         st.plotly_chart(
             build_chart(df, chart_zones, show_volume, chart_style, indicators, show_chart_zones),
             use_container_width=True,
