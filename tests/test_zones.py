@@ -2,7 +2,7 @@ import pandas as pd
 from dns_bot.zones import Zone, detect_fvg_zones, track_zone_lifecycle
 
 
-def test_bullish_fvg_uses_first_candle_range():
+def test_bullish_fvg_returns_gap_bounds():
     df = pd.DataFrame([
         {"open": 10, "high": 12, "low": 9, "close": 11},
         {"open": 12, "high": 15, "low": 11, "close": 14},
@@ -11,11 +11,11 @@ def test_bullish_fvg_uses_first_candle_range():
     zones = detect_fvg_zones(df)
     assert len(zones) == 1
     assert zones[0].kind == "demand"
-    assert zones[0].proximal == 12
-    assert zones[0].distal == 9
+    assert zones[0].proximal == 13
+    assert zones[0].distal == 12
 
 
-def test_bearish_fvg_uses_first_candle_range():
+def test_bearish_fvg_returns_gap_bounds():
     df = pd.DataFrame([
         {"open": 14, "high": 16, "low": 12, "close": 13},
         {"open": 12, "high": 14, "low": 10, "close": 11},
@@ -24,8 +24,8 @@ def test_bearish_fvg_uses_first_candle_range():
     zones = detect_fvg_zones(df)
     assert len(zones) == 1
     assert zones[0].kind == "supply"
-    assert zones[0].proximal == 12
-    assert zones[0].distal == 16
+    assert zones[0].proximal == 11
+    assert zones[0].distal == 12
 
 
 def test_demand_counts_defended_retests_not_taps():
@@ -41,7 +41,8 @@ def test_demand_counts_defended_retests_not_taps():
     assert result.touches == 1
     assert result.defended_retests == 1
     assert result.status == "tested"
-    assert result.score > result.strength
+    assert result.score > 0
+    assert result.score <= result.strength
 
 
 def test_demand_break_creates_sbr_flip():
