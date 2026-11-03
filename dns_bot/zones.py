@@ -154,8 +154,8 @@ def detect_base_leg_zones(df: pd.DataFrame, max_base: int = 6, range_lookback: i
     # Swing-origin zones: a confirmed pivot candle contributes its FULL
     # high-low range, matching discretionary swing-high/swing-low marking.
     # Require a meaningful departure so every tiny pivot is not promoted.
-    left_right = 2
-    departure_bars = 3
+    left_right = 3
+    departure_bars = 4
     for pivot in range(left_right, len(df) - left_right):
         row = df.iloc[pivot]
         pivot_high, pivot_low = float(row["high"]), float(row["low"])
@@ -172,7 +172,8 @@ def detect_base_leg_zones(df: pd.DataFrame, max_base: int = 6, range_lookback: i
         if after.empty:
             continue
 
-        stamp = str(row.get("timestamp", pivot))
+        # A swing is actionable only after its right-side confirmation candles close.
+        stamp = str(df.iloc[confirm_index].get("timestamp", confirm_index))
         if is_swing_high:
             departure = pivot_low - float(after["close"].min())
             if departure >= float(median) * 1.5:
@@ -229,6 +230,38 @@ def detect_base_leg_zones(df: pd.DataFrame, max_base: int = 6, range_lookback: i
         match.created_at = min(match.created_at, zone.created_at)
 
     zones = clustered
+
+    # Higher-timeframe charts can produce many nearby base/leg detections around
+    # one broad swing. Keep one representative origin per local price cluster.
+    typical_range = float(ranges.tail(min(len(ranges), range_lookback)).median())
+    merge_distance = max(typical_range * 2.0, 1e-12)
+    consolidated: list[Zone] = []
+    priority_order = sorted(
+        zones,
+        key=lambda z: (
+            1 if str(z.pattern).startswith("SWING_") else 0,
+            float(z.strength),
+            float(z.score),
+        ),
+        reverse=True,
+    )
+    for zone in priority_order:
+        z_low, z_high = sorted((float(zone.proximal), float(zone.distal)))
+        z_mid = (z_low + z_high) / 2.0
+        nearby = False
+        for kept in consolidated:
+            if kept.kind != zone.kind:
+                continue
+            k_low, k_high = sorted((float(kept.proximal), float(kept.distal)))
+            k_mid = (k_low + k_high) / 2.0
+            overlap = max(0.0, min(z_high, k_high) - max(z_low, k_low))
+            min_width = max(1e-12, min(z_high - z_low, k_high - k_low))
+            if overlap / min_width >= 0.35 or abs(z_mid - k_mid) <= merge_distance:
+                nearby = True
+                break
+        if not nearby:
+            consolidated.append(zone)
+    zones = consolidated
 
     unique: dict[tuple, Zone] = {}
     for zone in zones:
