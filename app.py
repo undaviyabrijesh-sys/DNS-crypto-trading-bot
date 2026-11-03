@@ -1,304 +1,271 @@
 from __future__ import annotations
 
-import streamlit as st
+import pandas as pd
 import plotly.graph_objects as go
+from plotly.subplots import make_subplots
+import streamlit as st
 
-from dns_bot.data import fetch_ohlcv
 from dns_bot.delta_data import fetch_delta_history
+from dns_bot.delta_market import fetch_ticker, fetch_orderbook, fetch_recent_trades
 from dns_bot.zones import detect_fvg_zones, detect_base_leg_zones
 from dns_bot.journal import load_trades, learning_report
 
 
-st.set_page_config(
-    page_title="SALTY TRADES | DNS Terminal",
-    page_icon="◈",
-    layout="wide",
-    initial_sidebar_state="expanded",
-)
+st.set_page_config(page_title="SALTY TRADES | Delta Terminal", page_icon="◈", layout="wide")
+
+st.markdown("""
+<style>
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Orbitron:wght@500;600;700&display=swap');
+:root{--bg:#0b0e11;--panel:#131722;--line:#242a35;--muted:#848e9c;--cyan:#00c2ff;--green:#0ecb81;--red:#f6465d;}
+html,body,[data-testid="stAppViewContainer"]{background:var(--bg);color:#eaecef;font-family:Inter,sans-serif;}
+[data-testid="stHeader"]{background:#0b0e11;}
+[data-testid="stSidebar"]{background:#11151d;border-right:1px solid #252b36;}
+.block-container{max-width:1900px;padding-top:.7rem;padding-bottom:1.5rem;}
+h1,h2,h3{font-family:Orbitron,sans-serif!important;color:#f0f3f7!important;}
+h1{font-size:1.3rem!important;}
+div[data-testid="stMetric"]{background:#131722;border:1px solid #252b36;border-radius:7px;padding:9px 12px;}
+[data-testid="stMetricLabel"]{color:#848e9c!important;font-size:.72rem;}
+[data-testid="stMetricValue"]{font-family:Orbitron,sans-serif;color:#eaecef!important;font-size:1.25rem;}
+div[data-testid="stTabs"] button{color:#929aa5!important;font-weight:650;}
+div[data-testid="stTabs"] button[aria-selected="true"]{color:#00c2ff!important;border-bottom:2px solid #00c2ff!important;}
+.stButton>button{background:#17202d;color:#dce3eb;border:1px solid #303a49;border-radius:5px;}
+.stButton>button:hover{border-color:#00c2ff;color:#00c2ff;}
+[data-testid="stDataFrame"]{border:1px solid #252b36;border-radius:6px;}
+hr{border-color:#252b36!important;}
+.small-label{font-size:10px;letter-spacing:1.4px;color:#848e9c;font-weight:700;margin:4px 0 9px;}
+.market-head{display:flex;align-items:center;gap:10px;padding:4px 0 10px;border-bottom:1px solid #252b36;margin-bottom:12px;}
+.market-symbol{font-family:Orbitron,sans-serif;font-size:20px;font-weight:700;color:#f0f3f7;}
+.market-tag{font-size:10px;color:#00c2ff;border:1px solid #13516a;padding:3px 7px;border-radius:4px;}
+.muted{color:#848e9c;font-size:11px;}
+.price-up{color:#0ecb81;font-weight:700}.price-down{color:#f6465d;font-weight:700}
+.panel{background:#131722;border:1px solid #252b36;border-radius:6px;padding:10px;margin-bottom:10px;}
+div[data-testid="stAlert"]{border-radius:6px;}
+</style>
+""", unsafe_allow_html=True)
 
 
-def tf_minutes(value: str) -> int:
-    if value.endswith("m"):
-        return int(value[:-1])
-    if value.endswith("h"):
-        return int(value[:-1]) * 60
-    if value.endswith("d"):
-        return int(value[:-1]) * 1440
-    raise ValueError(f"Unsupported timeframe: {value}")
+@st.cache_data(ttl=4, show_spinner=False)
+def get_ticker(symbol: str):
+    return fetch_ticker(symbol)
 
 
-def inject_theme() -> None:
-    st.markdown(
-        """
-        <style>
-        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Orbitron:wght@500;600;700;800&display=swap');
-        :root {
-          --bg:#070b14; --panel:#0d1422; --panel2:#101b2d; --line:#1d2c43;
-          --cyan:#00e5ff; --blue:#477bff; --green:#00e6a0; --red:#ff5277;
-          --text:#e7f1ff; --muted:#8295b2;
-        }
-        html, body, [data-testid="stAppViewContainer"] {
-          background: radial-gradient(ellipse at 50% -20%, #142746 0%, #090f1d 42%, #060912 100%);
-          color:var(--text);
-        }
-        [data-testid="stHeader"] {background:rgba(5,9,18,.75);}
-        [data-testid="stSidebar"] {
-          background:linear-gradient(180deg,#0c1525 0%,#080e19 100%);
-          border-right:1px solid var(--line);
-        }
-        [data-testid="stSidebar"] * {color:var(--text);}
-        .block-container {padding-top:1.15rem;padding-bottom:2rem;max-width:1800px;}
-        h1,h2,h3 {font-family:'Orbitron',sans-serif!important;letter-spacing:.04em;}
-        h1 {font-size:1.55rem!important;color:#f2f8ff!important;}
-        h2,h3 {color:#d9eaff!important;}
-        p, label, .stMarkdown {color:var(--text);}
-        [data-testid="stMetric"] {
-          background:linear-gradient(145deg,rgba(16,29,49,.96),rgba(9,17,30,.96));
-          border:1px solid #203653;border-radius:12px;padding:13px 16px;
-          box-shadow:0 0 22px rgba(0,229,255,.045), inset 0 1px rgba(255,255,255,.025);
-        }
-        [data-testid="stMetricLabel"] {color:#8da4c3!important;font-size:.75rem;}
-        [data-testid="stMetricValue"] {color:#f1f8ff!important;font-family:'Orbitron',sans-serif;}
-        .terminal-brand {
-          display:flex;align-items:center;gap:14px;padding:7px 0 17px 0;
-          border-bottom:1px solid #1c2b42;margin-bottom:16px;
-        }
-        .brand-mark {
-          width:42px;height:42px;border:1px solid var(--cyan);border-radius:11px;
-          display:flex;align-items:center;justify-content:center;color:var(--cyan);
-          font-size:24px;box-shadow:0 0 18px rgba(0,229,255,.18),inset 0 0 15px rgba(0,229,255,.08);
-        }
-        .brand-title {font-family:'Orbitron',sans-serif;font-size:19px;font-weight:800;letter-spacing:2px;color:#f2f8ff;}
-        .brand-sub {font-size:10px;letter-spacing:2px;color:#7790b2;margin-top:3px;}
-        .status-pill {
-          display:inline-flex;align-items:center;gap:7px;padding:6px 11px;border-radius:30px;
-          border:1px solid rgba(0,230,160,.35);background:rgba(0,230,160,.07);
-          color:#6dffd0;font-size:11px;letter-spacing:1.2px;font-weight:700;
-        }
-        .status-dot {width:7px;height:7px;border-radius:50%;background:#00e6a0;box-shadow:0 0 9px #00e6a0;}
-        .section-kicker {font-size:10px;letter-spacing:2px;color:#6f88aa;font-weight:700;margin:2px 0 9px;}
-        div[data-testid="stTabs"] button {color:#8da4c3!important;font-weight:700;}
-        div[data-testid="stTabs"] button[aria-selected="true"] {
-          color:#00e5ff!important;border-bottom:2px solid #00e5ff!important;
-        }
-        .stButton>button, .stDownloadButton>button {
-          border:1px solid #087f9a!important;color:#dffaff!important;
-          background:linear-gradient(110deg,#0c3347,#10213b)!important;
-          border-radius:8px!important;font-weight:700!important;
-          box-shadow:0 0 15px rgba(0,229,255,.08);
-        }
-        .stButton>button:hover,.stDownloadButton>button:hover {
-          border-color:#00e5ff!important;box-shadow:0 0 20px rgba(0,229,255,.2);
-        }
-        [data-testid="stDataFrame"], [data-testid="stFileUploader"] {
-          border:1px solid #1d2c43;border-radius:10px;overflow:hidden;
-        }
-        hr {border-color:#1d2c43!important;}
-        </style>
-        """,
-        unsafe_allow_html=True,
+@st.cache_data(ttl=3, show_spinner=False)
+def get_book(symbol: str):
+    return fetch_orderbook(symbol, 20)
+
+
+@st.cache_data(ttl=3, show_spinner=False)
+def get_trades(symbol: str):
+    return fetch_recent_trades(symbol)
+
+
+def timeframe_minutes(tf: str) -> int:
+    if tf.endswith("m"):
+        return int(tf[:-1])
+    if tf.endswith("h"):
+        return int(tf[:-1]) * 60
+    return 1440
+
+
+def build_chart(df: pd.DataFrame, zones: list, show_volume: bool = True):
+    rows = 2 if show_volume else 1
+    heights = [0.78, 0.22] if show_volume else [1]
+    fig = make_subplots(rows=rows, cols=1, shared_xaxes=True, vertical_spacing=.025,
+                        row_heights=heights)
+    fig.add_trace(go.Candlestick(
+        x=df.timestamp, open=df.open, high=df.high, low=df.low, close=df.close,
+        name="BTCUSD", increasing_line_color="#0ecb81", decreasing_line_color="#f6465d",
+        increasing_fillcolor="#0ecb81", decreasing_fillcolor="#f6465d",
+    ), row=1, col=1)
+    if show_volume and "volume" in df:
+        volume_colors = ["#0ecb8180" if c >= o else "#f6465d80"
+                         for o, c in zip(df.open, df.close)]
+        fig.add_trace(go.Bar(x=df.timestamp, y=df.volume, marker_color=volume_colors,
+                             name="Volume", showlegend=False), row=2, col=1)
+    for zone in zones[-35:]:
+        demand = zone.kind == "demand"
+        color = "rgba(14,203,129,.12)" if demand else "rgba(246,70,93,.12)"
+        edge = "rgba(14,203,129,.55)" if demand else "rgba(246,70,93,.55)"
+        low, high = sorted((float(zone.distal), float(zone.proximal)))
+        fig.add_hrect(y0=low, y1=high, fillcolor=color, line_color=edge,
+                      line_width=1, layer="below", row=1, col=1)
+    last = float(df.close.iloc[-1])
+    fig.add_hline(y=last, line_dash="dot", line_color="#00c2ff", line_width=1,
+                  annotation_text=f"{last:,.1f}", annotation_position="right",
+                  row=1, col=1)
+    fig.update_layout(
+        height=660, template="plotly_dark", paper_bgcolor="#0b0e11", plot_bgcolor="#0b0e11",
+        margin=dict(l=5, r=5, t=8, b=5), xaxis_rangeslider_visible=False,
+        font=dict(family="Inter", color="#aeb7c2", size=10),
+        hovermode="x unified", showlegend=False,
+        xaxis=dict(showgrid=True, gridcolor="#1d232d", rangeslider_visible=False),
+        yaxis=dict(side="right", showgrid=True, gridcolor="#1d232d", fixedrange=False),
+        xaxis2=dict(showgrid=True, gridcolor="#1d232d"),
+        yaxis2=dict(side="right", showgrid=True, gridcolor="#1d232d"),
     )
+    return fig
 
-
-inject_theme()
-
-st.markdown(
-    """
-    <div class="terminal-brand">
-      <div class="brand-mark">◈</div>
-      <div>
-        <div class="brand-title">SALTY TRADES</div>
-        <div class="brand-sub">DEMAND & SUPPLY INTELLIGENCE TERMINAL</div>
-      </div>
-      <div style="margin-left:auto" class="status-pill"><span class="status-dot"></span> RESEARCH MODE · PAPER ONLY</div>
-    </div>
-    """,
-    unsafe_allow_html=True,
-)
 
 with st.sidebar:
-    st.markdown("### ◈ TERMINAL CONTROLS")
-    exchange_id = st.selectbox("VENUE", ["Delta India", "okx", "bybit", "binance"], index=0)
-    symbol = st.selectbox(
-        "INSTRUMENT",
-        ["BTCUSD", "ETHUSD"] if exchange_id == "Delta India" else ["BTC/USDT", "ETH/USDT"],
-        index=0,
-    )
-    timeframe = st.selectbox("TIMEFRAME", ["1m", "3m", "5m", "15m", "1h", "4h"], index=3)
-    candle_limit = st.slider("VISIBLE CANDLES", 100, 1000, 500, 50)
-    detector = st.selectbox("ZONE ENGINE", ["Both", "FVG", "Base / Leg"])
+    st.markdown("## ◈ SALTY TRADES")
+    st.caption("DELTA EXCHANGE INDIA · MARKET TERMINAL")
+    symbol = st.selectbox("CONTRACT", ["BTCUSD", "ETHUSD"], index=0)
+    timeframe = st.selectbox("TIMEFRAME", ["1m", "3m", "5m", "15m", "30m", "1h", "4h"], index=3)
+    candle_count = st.select_slider("CHART HISTORY", options=[150, 250, 350, 500, 750, 1000], value=500)
+    zone_engine = st.selectbox("SUPPLY / DEMAND OVERLAY", ["Both", "FVG", "Base / Leg", "Off"])
+    show_volume = st.toggle("Show volume", value=True)
+    refresh = st.button("↻  REFRESH MARKET", use_container_width=True, type="primary")
     st.markdown("---")
-    refresh = st.button("⟳  SYNC MARKET DATA", use_container_width=True, type="primary")
-    st.caption("Public exchange candles · No order execution")
-    st.markdown("---")
-    st.markdown("**SYSTEM STATUS**")
-    st.markdown('<span class="status-pill"><span class="status-dot"></span> LIVE DATA CONNECTION ON DEMAND</span>', unsafe_allow_html=True)
+    st.caption("Public market data · Read-only · No orders sent")
 
-market_tab, journal_tab, about_tab = st.tabs(["◈  MARKET TERMINAL", "▤  TRADE JOURNAL", "⌘  SYSTEM"])
 
-with market_tab:
-    should_load = "candles" not in st.session_state or refresh
-    if should_load:
-        try:
-            with st.spinner("Connecting to exchange market data…"):
-                if exchange_id == "Delta India":
-                    days = max(1, int((candle_limit * tf_minutes(timeframe) + 1439) / 1440))
-                    market_df = fetch_delta_history(symbol=symbol, timeframe=timeframe, days=days)
-                else:
-                    market_df = fetch_ohlcv(exchange_id, symbol, timeframe, candle_limit)
-                market_df = market_df.tail(candle_limit).reset_index(drop=True)
-                st.session_state["candles"] = market_df
-                st.session_state["market_key"] = (exchange_id, symbol, timeframe)
-                st.session_state["load_error"] = None
-        except Exception as exc:
-            st.session_state["load_error"] = str(exc)
-
-    if st.session_state.get("load_error"):
-        st.error(f"Market data unavailable: {st.session_state['load_error']}")
-    elif "candles" in st.session_state:
-        df = st.session_state["candles"]
-        current_key = (exchange_id, symbol, timeframe)
-        if st.session_state.get("market_key") != current_key:
-            st.info("Change detected in market controls. Press SYNC MARKET DATA to load the selected instrument.")
-        zones = []
-        try:
-            if detector in ("Both", "FVG"):
-                zones.extend(detect_fvg_zones(df))
-            if detector in ("Both", "Base / Leg"):
-                zones.extend(detect_base_leg_zones(df))
-        except Exception as exc:
-            st.warning(f"Zone engine warning: {exc}")
-
-        last = float(df["close"].iloc[-1])
-        previous = float(df["close"].iloc[-2]) if len(df) > 1 else last
-        delta = last - previous
-        pct = (delta / previous * 100) if previous else 0.0
-        demand_count = sum(z.kind == "demand" for z in zones)
-        supply_count = sum(z.kind == "supply" for z in zones)
-
-        a,b,c,d,e = st.columns(5)
-        a.metric("LAST TRADED PRICE", f"{last:,.2f}", f"{delta:+,.2f} ({pct:+.2f}%)")
-        b.metric("CANDLES", f"{len(df):,}")
-        c.metric("ACTIVE DEMAND ZONES", f"{demand_count:,}")
-        d.metric("ACTIVE SUPPLY ZONES", f"{supply_count:,}")
-        e.metric("ZONE COUNT", f"{len(zones):,}")
-
-        st.markdown('<div class="section-kicker">PRICE ACTION · SUPPLY / DEMAND MAP</div>', unsafe_allow_html=True)
-        fig = go.Figure()
-        fig.add_trace(go.Candlestick(
-            x=df["timestamp"], open=df["open"], high=df["high"], low=df["low"], close=df["close"],
-            name=symbol, increasing_line_color="#00d9a0", decreasing_line_color="#ff5277",
-            increasing_fillcolor="#00b889", decreasing_fillcolor="#e74770",
-        ))
-
-        for index, zone in enumerate(zones[-40:]):
-            demand = zone.kind == "demand"
-            fill = "rgba(0,230,160,0.10)" if demand else "rgba(255,82,119,0.10)"
-            line = "rgba(0,230,160,0.62)" if demand else "rgba(255,82,119,0.62)"
-            y0, y1 = sorted([float(zone.distal), float(zone.proximal)])
-            fig.add_shape(
-                type="rect", xref="paper", x0=0, x1=1, y0=y0, y1=y1,
-                fillcolor=fill, line=dict(color=line, width=1), layer="below",
-            )
-            fig.add_annotation(
-                xref="paper", x=0.012, y=(y0+y1)/2, yref="y", showarrow=False,
-                text=f"{'DEMAND' if demand else 'SUPPLY'} · {zone.pattern} · {zone.method.upper()}",
-                font=dict(size=9, color="#8fffe0" if demand else "#ff9bb1"),
-                bgcolor="rgba(5,10,20,.72)", borderpad=3, xanchor="left",
-            )
-
-        fig.update_layout(
-            height=690, template="plotly_dark", paper_bgcolor="#080e19", plot_bgcolor="#080e19",
-            margin=dict(l=12,r=18,t=18,b=12), xaxis_rangeslider_visible=False,
-            font=dict(family="Inter, sans-serif", color="#a9bdd8", size=11),
-            legend=dict(orientation="h", y=1.02, x=0),
-            xaxis=dict(showgrid=True, gridcolor="rgba(80,110,150,.13)", zeroline=False,
-                       showspikes=True, spikemode="across", spikesnap="cursor"),
-            yaxis=dict(side="right", showgrid=True, gridcolor="rgba(80,110,150,.13)",
-                       zeroline=False, showspikes=True, spikesnap="cursor"),
-            hovermode="x unified",
-        )
-        st.plotly_chart(fig, use_container_width=True, config={
-            "displaylogo": False,
-            "scrollZoom": True,
-            "modeBarButtonsToRemove": ["select2d", "lasso2d"],
-        })
-
-        st.markdown('<div class="section-kicker">ZONE WATCHLIST</div>', unsafe_allow_html=True)
-        if zones:
-            zone_rows = []
-            for z in sorted(zones, key=lambda item: item.created_at, reverse=True):
-                zone_rows.append({
-                    "SIDE": z.kind.upper(),
-                    "PATTERN": z.pattern,
-                    "ENGINE": z.method.upper(),
-                    "PROXIMAL": round(float(z.proximal), 2),
-                    "DISTAL": round(float(z.distal), 2),
-                    "STRENGTH": round(float(z.strength), 3),
-                    "STATUS": z.status.upper(),
-                    "CREATED": z.created_at,
-                })
-            st.dataframe(zone_rows, use_container_width=True, hide_index=True)
-        else:
-            st.info("No zones detected in the selected candle window.")
-    else:
-        st.info("Press SYNC MARKET DATA to load the selected instrument.")
-
-with journal_tab:
-    st.markdown("### TRADE PERFORMANCE & LEARNING")
-    st.caption("Import completed backtest trades to review expectancy, drawdown and setup quality.")
-    uploaded = st.file_uploader("UPLOAD TRADE HISTORY CSV", type=["csv"])
-    if uploaded is not None:
-        try:
-            trades = load_trades(uploaded)
-            report = learning_report(trades)
-            metrics = report["summary"]
-            p,q,r,s = st.columns(4)
-            p.metric("COMPLETED TRADES", metrics["trades"])
-            q.metric("WIN RATE", f'{metrics["win_rate_pct"]:.1f}%')
-            r.metric("EXPECTANCY", f'{metrics["expectancy_r"]:.3f} R')
-            s.metric("PROFIT FACTOR", metrics["profit_factor"] if metrics["profit_factor"] is not None else "—")
-            st.write(
-                f'**Net result:** {metrics["net_r"]:.2f} R  ·  '
-                f'**Max drawdown (1% risk):** {metrics["max_drawdown_pct_at_1pct_risk"]:.2f}%  ·  '
-                f'**Longest losing streak:** {metrics["max_consecutive_losses"]}'
-            )
-            st.info(report["training_note"])
-            for title, key in [
-                ("ZONE PATTERN", "zone_pattern"), ("DETECTOR", "zone_method"),
-                ("TREND ALIGNMENT", "trend_alignment"), ("ZONE SCORE BAND", "zone_score_band"),
-                ("LONG VS SHORT", "side"), ("RETEST NUMBER", "touch_number"),
-            ]:
-                st.markdown(f"#### {title}")
-                frame = report["groups"][key]
-                if frame.empty:
-                    st.caption("Not enough data for this breakdown.")
-                else:
-                    st.dataframe(frame, use_container_width=True, hide_index=True)
-            st.download_button(
-                "DOWNLOAD JOURNAL CSV", trades.to_csv(index=False),
-                file_name="dns_trade_journal.csv", mime="text/csv",
-            )
-        except Exception as exc:
-            st.error(f"Could not analyse this file: {exc}")
-    else:
-        st.info("No trade file loaded yet. Upload a backtest CSV to populate the performance desk.")
-
-with about_tab:
-    st.markdown("### SYSTEM CONFIGURATION")
-    st.write("**Venue focus:** Delta Exchange India")
-    st.write("**Primary instrument:** BTCUSD perpetual")
-    st.write("**Analysis:** FVG and base/leg supply-demand zones")
-    st.write("**Execution:** Disabled — research and paper mode only")
-    st.warning(
-        "This terminal currently visualizes public market data and detected zones. "
-        "It does not send orders. Validate historical data, fees, slippage, funding, "
-        "contract sizing and paper execution before considering live deployment."
-    )
-
+# Instrument header and top-of-screen market statistics
 st.markdown(
-    '<div style="text-align:center;color:#526985;font-size:10px;letter-spacing:1.6px;'
-    'padding:18px 0 4px;border-top:1px solid #1b2a40;margin-top:24px;">'
-    'SALTY TRADES · DNS INTELLIGENCE CORE · BUILT FOR RESEARCH, NOT ORDER EXECUTION</div>',
+    f'<div class="market-head"><span class="market-symbol">{symbol}</span>'
+    f'<span class="market-tag">PERPETUAL</span><span class="market-tag">DELTA INDIA</span>'
+    f'<span class="muted">USD quoted · public market feed</span></div>',
     unsafe_allow_html=True,
 )
+
+# A changed contract/timeframe always reloads the matching candle series.
+market_key = (symbol, timeframe, candle_count)
+if refresh or st.session_state.get("market_key") != market_key:
+    st.session_state.pop("market_error", None)
+    try:
+        days = max(1, int((candle_count * timeframe_minutes(timeframe) + 1439) / 1440))
+        with st.spinner(f"Loading {symbol} {timeframe} candles from Delta…"):
+            candles = fetch_delta_history(symbol=symbol, timeframe=timeframe, days=days)
+        candles = candles.tail(candle_count).reset_index(drop=True)
+        if candles.empty or len(candles) < 3:
+            raise RuntimeError("Delta returned fewer than 3 completed candles.")
+        st.session_state["market_candles"] = candles
+        st.session_state["market_key"] = market_key
+    except Exception as exc:
+        st.session_state["market_error"] = str(exc)
+
+ticker = book = trades = None
+market_errors = []
+try:
+    ticker = get_ticker(symbol)
+except Exception as exc:
+    market_errors.append(f"Ticker: {exc}")
+try:
+    book = get_book(symbol)
+except Exception as exc:
+    market_errors.append(f"Order book: {exc}")
+try:
+    trades = get_trades(symbol)
+except Exception as exc:
+    market_errors.append(f"Recent trades: {exc}")
+
+df = st.session_state.get("market_candles")
+if df is not None and not df.empty:
+    last_price = float(ticker.get("close", df.close.iloc[-1])) if ticker else float(df.close.iloc[-1])
+    change = float(ticker.get("ltp_change_24h", 0) or 0) if ticker else 0.0
+    day_high = ticker.get("high", "—") if ticker else "—"
+    day_low = ticker.get("low", "—") if ticker else "—"
+    volume_24h = ticker.get("volume", "—") if ticker else "—"
+    mark = ticker.get("mark_price", "—") if ticker else "—"
+    c1,c2,c3,c4,c5,c6 = st.columns(6)
+    c1.metric("LAST PRICE", f"{last_price:,.2f}", f"{change:+.2f}% 24h")
+    c2.metric("MARK PRICE", f"{float(mark):,.2f}" if mark not in (None, "—") else "—")
+    c3.metric("24H HIGH", f"{float(day_high):,.2f}" if day_high != "—" else "—")
+    c4.metric("24H LOW", f"{float(day_low):,.2f}" if day_low != "—" else "—")
+    c5.metric("24H VOLUME", f"{float(volume_24h):,.2f}" if volume_24h != "—" else "—")
+    c6.metric("CANDLES", f"{len(df):,}")
+
+    zones = []
+    try:
+        if zone_engine in ("Both", "FVG"):
+            zones.extend(detect_fvg_zones(df))
+        if zone_engine in ("Both", "Base / Leg"):
+            zones.extend(detect_base_leg_zones(df))
+    except Exception as exc:
+        st.warning(f"Zone detection issue: {exc}")
+
+    chart_col, book_col = st.columns([4.8, 1.35], gap="small")
+    with chart_col:
+        st.markdown('<div class="small-label">PRICE CHART · TRADINGVIEW-STYLE WORKSPACE</div>',
+                    unsafe_allow_html=True)
+        st.plotly_chart(build_chart(df, zones, show_volume), use_container_width=True,
+                        config={"displaylogo": False, "scrollZoom": True,
+                                "modeBarButtonsToRemove": ["select2d", "lasso2d"]},
+                        key=f"chart-{symbol}-{timeframe}-{zone_engine}-{show_volume}")
+    with book_col:
+        st.markdown('<div class="small-label">ORDER BOOK · L2</div>', unsafe_allow_html=True)
+        if book:
+            asks = sorted(book.get("sell", []), key=lambda x: float(x.get("price", 0)))[:10]
+            bids = sorted(book.get("buy", []), key=lambda x: float(x.get("price", 0)), reverse=True)[:10]
+            ask_rows = [{"SIDE":"ASK", "PRICE":f'{float(x["price"]):,.1f}',
+                         "SIZE":f'{float(x.get("size",0)):,.0f}'} for x in reversed(asks)]
+            bid_rows = [{"SIDE":"BID", "PRICE":f'{float(x["price"]):,.1f}',
+                         "SIZE":f'{float(x.get("size",0)):,.0f}'} for x in bids]
+            st.dataframe(ask_rows + bid_rows, hide_index=True, height=390,
+                         use_container_width=True)
+            if asks and bids:
+                spread = float(asks[0]["price"]) - float(bids[0]["price"])
+                st.metric("BID / ASK SPREAD", f"{spread:,.2f}")
+        else:
+            st.info("Order book temporarily unavailable.")
+        st.markdown('<div class="small-label">RECENT TRADES</div>', unsafe_allow_html=True)
+        if trades:
+            rows = []
+            for trade in trades[:12]:
+                side = str(trade.get("side", "")).upper()
+                rows.append({"SIDE":side,
+                             "PRICE":f'{float(trade.get("price",0)):,.1f}',
+                             "SIZE":f'{float(trade.get("size",0)):,.0f}'})
+            st.dataframe(rows, hide_index=True, height=260, use_container_width=True)
+        else:
+            st.caption("No recent trade prints returned.")
+
+    lower_tabs = st.tabs(["ZONE WATCHLIST", "MARKET DATA", "TRADE JOURNAL", "SYSTEM"])
+    with lower_tabs[0]:
+        st.markdown("**Detected supply and demand areas**")
+        if zones:
+            rows = [{
+                "SIDE": z.kind.upper(), "PATTERN": z.pattern, "SOURCE": z.method.upper(),
+                "PROXIMAL": round(float(z.proximal), 2), "DISTAL": round(float(z.distal), 2),
+                "STRENGTH": round(float(z.strength), 3), "STATUS": z.status.upper(),
+                "FORMED": z.created_at,
+            } for z in sorted(zones, key=lambda x: x.created_at, reverse=True)]
+            st.dataframe(rows, use_container_width=True, hide_index=True)
+        else:
+            st.info("No zones found in this chart window. Try 'Both' or a higher timeframe.")
+    with lower_tabs[1]:
+        st.markdown("**Latest completed candles**")
+        st.dataframe(df.tail(30).sort_values("timestamp", ascending=False),
+                     use_container_width=True, hide_index=True)
+    with lower_tabs[2]:
+        st.markdown("**Trade performance & learning**")
+        uploaded = st.file_uploader("Upload backtest trade CSV", type=["csv"], key="journal-upload")
+        if uploaded is not None:
+            try:
+                journal = learning_report(load_trades(uploaded))
+                metrics = journal["summary"]
+                m1,m2,m3,m4 = st.columns(4)
+                m1.metric("TRADES", metrics["trades"])
+                m2.metric("WIN RATE", f'{metrics["win_rate_pct"]:.1f}%')
+                m3.metric("EXPECTANCY", f'{metrics["expectancy_r"]:.3f} R')
+                m4.metric("PROFIT FACTOR", metrics["profit_factor"] if metrics["profit_factor"] is not None else "—")
+                st.write(journal["training_note"])
+                for label,key in [("Zone pattern","zone_pattern"),("Zone engine","zone_method"),
+                                  ("Trend alignment","trend_alignment"),("Side","side")]:
+                    st.markdown(f"##### {label}")
+                    st.dataframe(journal["groups"][key], use_container_width=True, hide_index=True)
+            except Exception as exc:
+                st.error(f"Journal error: {exc}")
+        else:
+            st.caption("Upload the backtest trade CSV to inspect the strategy's measured performance.")
+    with lower_tabs[3]:
+        st.warning("Read-only research terminal. No order entry, account balance, positions or private account data are connected.")
+        st.write("Data sources: Delta public OHLC candles, ticker, L2 order book and public trades.")
+        if market_errors:
+            for error in market_errors:
+                st.caption(error)
+else:
+    st.error(f"Chart data could not be loaded: {st.session_state.get('market_error', 'No candle data available.')}")
+    st.info("Use Refresh Market after checking the Delta API connection. This terminal will not draw synthetic or placeholder candles.")
+
+st.markdown('<div style="border-top:1px solid #252b36;padding-top:10px;color:#687382;font-size:10px;letter-spacing:1px;">SALTY TRADES · DELTA EXCHANGE INDIA · READ-ONLY RESEARCH TERMINAL</div>',
+            unsafe_allow_html=True)
