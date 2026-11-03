@@ -13,3 +13,16 @@ def test_bullish_fvg_uses_first_candle_range():
     assert zones[0].kind == "demand"
     assert zones[0].proximal == 12
     assert zones[0].distal == 9
+
+
+def test_bearish_fvg_uses_first_candle_range():
+    df = pd.DataFrame([
+        {"open": 14, "high": 16, "low": 12, "close": 13},
+        {"open": 12, "high": 14, "low": 10, "close": 11},
+        {"open": 9, "high": 11, "low": 7, "close": 8},
+    ])
+    zones = detect_fvg_zones(df)
+    assert len(zones) == 1
+    assert zones[0].kind == "supply"
+    assert zones[0].proximal == 12
+    assert zones[0].distal == 16
