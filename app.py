@@ -297,7 +297,7 @@ if df is not None and not df.empty:
         else:
             st.caption("No recent trade prints returned.")
 
-    lower_tabs = st.tabs(["ZONE WATCHLIST", "MARKET DATA", "TRADE JOURNAL", "SYSTEM"])
+    lower_tabs = st.tabs(["ZONE WATCHLIST", "TRADE TICKET", "MARKET DATA", "TRADE JOURNAL", "SYSTEM"])
     with lower_tabs[0]:
         st.markdown("**Detected supply and demand areas**")
         if zones:
@@ -310,6 +310,78 @@ if df is not None and not df.empty:
             st.dataframe(rows, use_container_width=True, hide_index=True)
         else:
             st.info("No zones found in this chart window. Try 'Both' or a higher timeframe.")
+    with lower_tabs[1]:
+        st.markdown("**Manual trade ticket · paper planning only**")
+        st.caption("Build and track a trade plan here. This version does not send orders to Delta Exchange.")
+        if "paper_trade_plans" not in st.session_state:
+            st.session_state["paper_trade_plans"] = []
+
+        zone_labels = ["Manual / no zone"] + [
+            f"{z.kind.upper()} | {z.method.upper()} | {z.pattern} | "
+            f"{min(float(z.proximal), float(z.distal)):.2f}–"
+            f"{max(float(z.proximal), float(z.distal)):.2f} | {z.created_at}"
+            for z in zones
+        ]
+        with st.form("paper_trade_ticket", clear_on_submit=False):
+            a,b,c1 = st.columns(3)
+            with a:
+                ticket_side = st.selectbox("DIRECTION", ["LONG", "SHORT"])
+                ticket_entry = st.number_input("PLANNED ENTRY", min_value=0.0,
+                    value=float(last_price), format="%.2f")
+                ticket_stop = st.number_input("STOP LOSS", min_value=0.0,
+                    value=round(float(last_price) * (0.995 if ticket_side == "LONG" else 1.005), 2),
+                    format="%.2f")
+            with b:
+                ticket_target = st.number_input("TAKE PROFIT", min_value=0.0,
+                    value=round(float(last_price) * (1.01 if ticket_side == "LONG" else 0.99), 2),
+                    format="%.2f")
+                ticket_qty = st.number_input("CONTRACTS / QTY (manual)", min_value=0.0,
+                    value=0.0, step=1.0, format="%.4f")
+                ticket_risk_pct = st.number_input("PLANNED RISK %", min_value=0.0,
+                    max_value=5.0, value=1.0, step=0.25)
+            with c1:
+                ticket_zone = st.selectbox("SETUP / ZONE", zone_labels)
+                ticket_note = st.text_input("SETUP NOTE", placeholder="e.g. 15m demand retest + bullish close")
+                ticket_status = st.selectbox("PLAN STATUS", ["WATCHING", "READY", "ENTERED MANUALLY"])
+            if ticket_side == "LONG":
+                valid_levels = ticket_stop < ticket_entry < ticket_target
+                risk_distance = ticket_entry - ticket_stop
+                reward_distance = ticket_target - ticket_entry
+            else:
+                valid_levels = ticket_target < ticket_entry < ticket_stop
+                risk_distance = ticket_stop - ticket_entry
+                reward_distance = ticket_entry - ticket_target
+            rr = reward_distance / risk_distance if risk_distance > 0 else 0.0
+            st.caption(f"Risk distance: {risk_distance:,.2f} · Reward distance: {reward_distance:,.2f} · R:R: {rr:.2f}:1")
+            if not valid_levels:
+                st.error("Invalid levels: LONG requires SL < Entry < TP; SHORT requires TP < Entry < SL.")
+            submitted = st.form_submit_button("＋  SAVE TRADE PLAN", type="primary",
+                                               disabled=not valid_levels or ticket_entry <= 0)
+        if submitted:
+            import datetime as dt
+            st.session_state["paper_trade_plans"].append({
+                "created_at_utc": dt.datetime.now(dt.timezone.utc).isoformat(timespec="seconds"),
+                "symbol": symbol, "timeframe": timeframe, "side": ticket_side,
+                "entry": float(ticket_entry), "stop": float(ticket_stop),
+                "target": float(ticket_target), "rr": round(rr, 3),
+                "quantity_manual": float(ticket_qty), "risk_pct_planned": float(ticket_risk_pct),
+                "zone": ticket_zone, "status": ticket_status, "note": ticket_note,
+            })
+            st.success("Trade plan saved in this session. No exchange order was placed.")
+
+        plans = st.session_state["paper_trade_plans"]
+        if plans:
+            plan_df = pd.DataFrame(plans)
+            st.markdown("**Saved trade plans (session only)**")
+            st.dataframe(plan_df, use_container_width=True, hide_index=True)
+            st.download_button("Download trade plans CSV", plan_df.to_csv(index=False),
+                file_name="salty_trades_paper_plans.csv", mime="text/csv")
+            if st.button("Clear saved plans", key="clear-paper-plans"):
+                st.session_state["paper_trade_plans"] = []
+                st.rerun()
+        else:
+            st.info("No trade plans saved in this session yet.")
+
     with lower_tabs[1]:
         st.markdown("**Latest completed candles**")
         st.dataframe(df.tail(30).sort_values("timestamp", ascending=False),
