@@ -35,7 +35,7 @@ class Trade:
 
 def fetch_history(exchange_id: str, symbol: str, timeframe: str, days: int) -> pd.DataFrame:
     """Paginated public OHLCV download; excludes the currently forming candle."""
-    exchange_class = getattr(ccxt, exchange_id)
+    if exchange_id.lower() in {"deltaindia", "delta_india"}:\n        from dns_bot.delta_data import fetch_delta_history\n        return fetch_delta_history(symbol=symbol, timeframe=timeframe, days=days)\n    exchange_class = getattr(ccxt, exchange_id)
     exchange = exchange_class({"enableRateLimit": True})
     if not exchange.has.get("fetchOHLCV"):
         raise RuntimeError(f"{exchange_id} does not support fetchOHLCV")
