@@ -1,5 +1,5 @@
 import pandas as pd
-from dns_bot.zones import Zone, detect_fvg_zones, track_zone_lifecycle
+from dns_bot.zones import Zone, detect_fvg_zones, detect_base_leg_zones, track_zone_lifecycle
 
 
 def test_bullish_fvg_returns_gap_bounds():
