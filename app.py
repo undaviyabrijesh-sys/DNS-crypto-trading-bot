@@ -18,6 +18,7 @@ import streamlit as st
 from dns_bot.delta_data import fetch_delta_history
 from dns_bot.delta_market import fetch_ticker, fetch_orderbook, fetch_recent_trades
 from dns_bot.zones import detect_base_leg_zones, track_zone_lifecycle
+from dns_bot.entries import find_entry_setups
 from dns_bot.journal import load_trades, learning_report
 
 
@@ -329,7 +330,7 @@ if df is not None and not df.empty:
         else:
             st.caption("No recent trade prints returned.")
 
-    lower_tabs = st.tabs(["ZONE WATCHLIST", "TRADE TICKET", "MARKET DATA", "TRADE JOURNAL", "SYSTEM"])
+    lower_tabs = st.tabs(["ZONE WATCHLIST", "TRADE TICKET", "MARKET DATA", "TRADE JOURNAL", "SYSTEM", "ENTRY MODULE"])
     with lower_tabs[0]:
         st.markdown("**Detected supply and demand areas**")
         if zones:
@@ -448,6 +449,24 @@ if df is not None and not df.empty:
         if market_errors:
             for error in market_errors:
                 st.caption(error)
+
+    with lower_tabs[5]:
+        st.markdown("**15m zone / 3m confirmation / paper signal only**")
+        st.caption("Wait for a 3m tap, then a completed 3m close beyond the zone proximal edge. Entry is the following 3m candle open.")
+        try:
+            candles_15m = fetch_delta_history(symbol=symbol, timeframe="15m", days=16)
+            candles_3m = fetch_delta_history(symbol=symbol, timeframe="3m", days=7)
+            zones_15m = track_zone_lifecycle(candles_15m, detect_base_leg_zones(candles_15m))
+            setups = find_entry_setups(candles_3m, zones_15m, buffer_atr=0.25)
+            st.metric("ATR BUFFER", "0.25 x 3m ATR(14)")
+            if setups:
+                st.dataframe(pd.DataFrame(setups), use_container_width=True, hide_index=True)
+                st.info("Historical confirmation candidates using the next 3m candle open. Research only; no live orders.")
+            else:
+                st.info("No qualifying tap-and-close confirmation in the loaded candles. No trade is preferable to a forced entry.")
+            st.caption("SL: beyond 15m zone distal edge + ATR buffer. T1: 2R. Runner: nearest opposing 15m zone, only when it offers at least 2R.")
+        except Exception as exc:
+            st.error(f"Entry module data/analysis error: {exc}")
 else:
     st.error(f"Chart data could not be loaded: {st.session_state.get('market_error', 'No candle data available.')}")
     st.info("Use Refresh Market after checking the Delta API connection. This terminal will not draw synthetic or placeholder candles.")
