@@ -48,7 +48,7 @@ fig = go.Figure(data=[go.Candlestick(
 )])
 for zone in zones[-30:]:
     color = "rgba(0,170,100,0.18)" if zone.kind == "demand" else "rgba(220,60,60,0.18)"
-    fig.add_hrect(y0=zone.distal, y1=zone.proximal, fillcolor=color,
+    fig.add_hrect(y0=min(zone.distal, zone.proximal), y1=max(zone.distal, zone.proximal), fillcolor=color,
                   line_width=1, annotation_text=f"{zone.kind.upper()} · {zone.method} · {zone.pattern}",
                   annotation_position="top left")
 fig.update_layout(height=680, xaxis_rangeslider_visible=False,
