@@ -15,13 +15,12 @@ st.set_page_config(page_title="SALTY TRADES | Delta Terminal", page_icon="◈", 
 
 st.markdown("""
 <style>
-@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Orbitron:wght@500;600;700&display=swap');
 :root{--bg:#0b0e11;--panel:#131722;--line:#242a35;--muted:#848e9c;--cyan:#00c2ff;--green:#0ecb81;--red:#f6465d;}
-html,body,[data-testid="stAppViewContainer"]{background:var(--bg);color:#eaecef;font-family:Inter,sans-serif;}
+html,body,[data-testid="stAppViewContainer"]{background:var(--bg);color:#eaecef;font-family:Inter,Arial,sans-serif;}
 [data-testid="stHeader"]{background:#0b0e11;}
 [data-testid="stSidebar"]{background:#11151d;border-right:1px solid #252b36;}
 .block-container{max-width:1900px;padding-top:.7rem;padding-bottom:1.5rem;}
-h1,h2,h3{font-family:Orbitron,sans-serif!important;color:#f0f3f7!important;}
+h1,h2,h3{font-family:Orbitron,Arial,sans-serif!important;color:#f0f3f7!important;}
 h1{font-size:1.3rem!important;}
 div[data-testid="stMetric"]{background:#131722;border:1px solid #252b36;border-radius:7px;padding:9px 12px;}
 [data-testid="stMetricLabel"]{color:#848e9c!important;font-size:.72rem;}
@@ -44,12 +43,12 @@ div[data-testid="stAlert"]{border-radius:6px;}
 """, unsafe_allow_html=True)
 
 
-@st.cache_data(ttl=4, show_spinner=False)
+@st.cache_data(ttl=10, show_spinner=False)
 def get_ticker(symbol: str):
     return fetch_ticker(symbol)
 
 
-@st.cache_data(ttl=3, show_spinner=False)
+@st.cache_data(ttl=8, show_spinner=False)
 def get_book(symbol: str):
     return fetch_orderbook(symbol, 20)
 
@@ -65,6 +64,17 @@ def timeframe_minutes(tf: str) -> int:
     if tf.endswith("h"):
         return int(tf[:-1]) * 60
     return 1440
+
+
+@st.cache_data(ttl=300, show_spinner=False)
+def get_zones(df: pd.DataFrame, engine: str):
+    """Cache expensive zone scans; Streamlit reruns should not rescan unchanged candles."""
+    found = []
+    if engine in ("Both", "FVG"):
+        found.extend(detect_fvg_zones(df))
+    if engine in ("Both", "Base / Leg"):
+        found.extend(detect_base_leg_zones(df))
+    return found
 
 
 def build_chart(df: pd.DataFrame, zones: list, show_volume: bool = True,
@@ -216,10 +226,7 @@ if df is not None and not df.empty:
 
     zones = []
     try:
-        if zone_engine in ("Both", "FVG"):
-            zones.extend(detect_fvg_zones(df))
-        if zone_engine in ("Both", "Base / Leg"):
-            zones.extend(detect_base_leg_zones(df))
+        zones = get_zones(df, zone_engine)
     except Exception as exc:
         st.warning(f"Zone detection issue: {exc}")
 
@@ -235,15 +242,19 @@ if df is not None and not df.empty:
                                         default=["EMA 20", "EMA 50"], key="chart-indicators")
         with tool3:
             show_chart_zones = st.toggle("Show zones", value=True, key="chart-zones")
+        # Keep the full zone list in the watchlist, but draw only the strongest 24
+        # on the chart to avoid hundreds of Plotly layout shapes slowing the browser.
+        chart_zones = sorted(
+            zones, key=lambda z: (float(z.strength), str(z.created_at)), reverse=True
+        )[:24]
         st.plotly_chart(
-            build_chart(df, zones, show_volume, chart_style, indicators, show_chart_zones),
+            build_chart(df, chart_zones, show_volume, chart_style, indicators, show_chart_zones),
             use_container_width=True,
             config={
                 "displaylogo": False, "scrollZoom": True, "doubleClick": "reset",
-                "editable": True,
+                "editable": False,
                 "modeBarButtonsToAdd": [
-                    "drawline", "drawopenpath", "drawrect", "drawcircle",
-                    "drawclosedpath", "eraseshape"
+                    "drawline", "drawrect", "drawcircle", "eraseshape"
                 ],
                 "modeBarButtonsToRemove": ["select2d", "lasso2d"],
                 "toImageButtonOptions": {"format": "png", "filename": "salty-trades-chart"}
