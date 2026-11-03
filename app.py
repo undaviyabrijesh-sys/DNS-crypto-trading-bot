@@ -17,7 +17,7 @@ import streamlit as st
 
 from dns_bot.delta_data import fetch_delta_history
 from dns_bot.delta_market import fetch_ticker, fetch_orderbook, fetch_recent_trades
-from dns_bot.zones import detect_fvg_zones, detect_base_leg_zones, track_zone_lifecycle
+from dns_bot.zones import detect_base_leg_zones, track_zone_lifecycle
 from dns_bot.journal import load_trades, learning_report
 
 
@@ -77,13 +77,9 @@ def timeframe_minutes(tf: str) -> int:
 
 
 @st.cache_data(ttl=300, show_spinner=False)
-def get_zones(df: pd.DataFrame, engine: str):
-    """Cache expensive zone scans; Streamlit reruns should not rescan unchanged candles."""
-    found = []
-    if engine in ("Both", "FVG"):
-        found.extend(detect_fvg_zones(df))
-    if engine in ("Both", "Base / Leg"):
-        found.extend(detect_base_leg_zones(df))
+def get_zones(df: pd.DataFrame, engine: str = "Base / Leg"):
+    """Use only base/leg and confirmed swing-origin zones; FVG is disabled."""
+    found = detect_base_leg_zones(df)
     return track_zone_lifecycle(df, found)
 
 
@@ -192,7 +188,9 @@ with st.sidebar:
     timeframe = st.selectbox("TIMEFRAME", ["1m", "3m", "5m", "15m", "30m", "1h", "4h"], index=3)
     candle_count = st.select_slider("CHART HISTORY", options=[250, 500, 750, 1000, 1500, 1999], value=1500)
     st.caption("15m chart: 1,500 candles ≈ 15.6 days")
-    zone_engine = st.selectbox("SUPPLY / DEMAND OVERLAY", ["Both", "FVG", "Base / Leg", "Off"])
+    zone_engine = "Base / Leg"
+    st.markdown("**SUPPLY / DEMAND: BASE / LEG ONLY**")
+    st.caption("Includes base-leg formations and confirmed swing-candle zones. FVG is disabled.")
     show_volume = st.toggle("Show volume", value=True)
     refresh = st.button("↻  REFRESH MARKET", use_container_width=True, type="primary")
     st.markdown("---")
@@ -346,7 +344,7 @@ if df is not None and not df.empty:
             } for z in sorted(zones, key=lambda x: x.created_at, reverse=True)]
             st.dataframe(rows, use_container_width=True, hide_index=True)
         else:
-            st.info("No zones found in this chart window. Try 'Both' or a higher timeframe.")
+            st.info("No base/leg or confirmed swing zones found in this chart window. Try a higher timeframe.")
     with lower_tabs[1]:
         st.markdown("**Manual trade ticket · paper planning only**")
         st.caption("Build and track a trade plan here. This version does not send orders to Delta Exchange.")
