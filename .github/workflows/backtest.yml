@@ -8,9 +8,9 @@ on:
   workflow_dispatch:
     inputs:
       symbol:
-        description: "CCXT market symbol"
+        description: "Delta India product symbol"
         required: true
-        default: "BTC/USDT"
+        default: "BTCUSD"
       days:
         description: "History window in days"
         required: true
@@ -27,10 +27,10 @@ jobs:
       - run: pip install -r requirements.txt
       - name: Run BTC backtest
         if: ${{ github.event_name == 'push' }}
-        run: PYTHONPATH=. python -m dns_bot.backtest --symbol BTC/USDT --timeframe 15m --days 365
+        run: PYTHONPATH=. python -m dns_bot.backtest --exchange deltaindia --symbol BTCUSD --timeframe 15m --days 365
       - name: Run requested backtest
         if: ${{ github.event_name == 'workflow_dispatch' }}
-        run: PYTHONPATH=. python -m dns_bot.backtest --symbol "${{ inputs.symbol }}" --timeframe 15m --days "${{ inputs.days }}"
+        run: PYTHONPATH=. python -m dns_bot.backtest --exchange deltaindia --symbol "${{ inputs.symbol }}" --timeframe 15m --days "${{ inputs.days }}"
       - uses: actions/upload-artifact@v4
         with:
           name: dns-backtest-results
