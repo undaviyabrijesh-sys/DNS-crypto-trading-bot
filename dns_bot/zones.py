@@ -155,7 +155,7 @@ def detect_base_leg_zones(df: pd.DataFrame, max_base: int = 6, range_lookback: i
     # high-low range, matching discretionary swing-high/swing-low marking.
     # Require a meaningful departure so every tiny pivot is not promoted.
     left_right = 3
-    departure_bars = 4
+    departure_bars = left_right
     for pivot in range(left_right, len(df) - left_right):
         row = df.iloc[pivot]
         pivot_high, pivot_low = float(row["high"]), float(row["low"])
