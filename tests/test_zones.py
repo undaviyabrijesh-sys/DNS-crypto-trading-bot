@@ -34,7 +34,7 @@ def test_demand_counts_defended_retests_not_taps():
         {"open": 104, "high": 105, "low": 103, "close": 104},
         {"open": 104, "high": 105, "low": 103, "close": 104},
         {"open": 103, "high": 106, "low": 102, "close": 105},
-        {"open": 105, "high": 107, "low": 104, "close": 106},
+        {"open": 105, "high": 107, "low": 105, "close": 106},
     ])
     zone = Zone("demand", "test", 104, 102, "0", 0, 0, 0.6, "DBR", created_index=0)
     result = track_zone_lifecycle(df, [zone])[0]
