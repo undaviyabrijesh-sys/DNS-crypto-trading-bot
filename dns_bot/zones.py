@@ -72,8 +72,8 @@ def detect_base_leg_zones(
     times the median recent range. This is a transparent mechanical proxy.
     """
     _valid_ohlc(df)
-    if max_base < 1 or max_base > 5:
-        raise ValueError("max_base must be between 1 and 5")
+    if max_base < 1 or max_base > 6:
+        raise ValueError("max_base must be between 1 and 6")
     ranges = (df["high"] - df["low"]).astype(float)
     median_ranges = ranges.rolling(range_lookback, min_periods=3).median()
     zones: list[Zone] = []
