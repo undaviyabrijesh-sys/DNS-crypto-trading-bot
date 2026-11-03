@@ -120,7 +120,7 @@ def build_chart(df: pd.DataFrame, zones: list, show_volume: bool = True,
                   annotation_text=f"{last:,.1f}", annotation_position="right",
                   row=1, col=1)
     fig.update_layout(
-        height=700, template="plotly_dark", paper_bgcolor="#0b0e11", plot_bgcolor="#0b0e11",
+        height=820, template="plotly_dark", paper_bgcolor="#0b0e11", plot_bgcolor="#0b0e11",
         margin=dict(l=5, r=5, t=8, b=5),
         font=dict(family="Inter", color="#aeb7c2", size=10),
         hovermode="x unified", showlegend=bool(indicators),
@@ -150,7 +150,8 @@ with st.sidebar:
     st.caption("DELTA EXCHANGE INDIA · MARKET TERMINAL")
     symbol = st.selectbox("CONTRACT", ["BTCUSD", "ETHUSD"], index=0)
     timeframe = st.selectbox("TIMEFRAME", ["1m", "3m", "5m", "15m", "30m", "1h", "4h"], index=3)
-    candle_count = st.select_slider("CHART HISTORY", options=[150, 250, 350, 500, 750, 1000], value=500)
+    candle_count = st.select_slider("CHART HISTORY", options=[250, 500, 750, 1000, 1500, 1999], value=1500)
+    st.caption("15m chart: 1,500 candles ≈ 15.6 days")
     zone_engine = st.selectbox("SUPPLY / DEMAND OVERLAY", ["Both", "FVG", "Base / Leg", "Off"])
     show_volume = st.toggle("Show volume", value=True)
     refresh = st.button("↻  REFRESH MARKET", use_container_width=True, type="primary")
@@ -222,8 +223,7 @@ if df is not None and not df.empty:
     except Exception as exc:
         st.warning(f"Zone detection issue: {exc}")
 
-    chart_col, book_col = st.columns([4.8, 1.35], gap="small")
-    with chart_col:
+    with st.container():
         st.markdown('<div class="small-label">PRICE CHART · TRADINGVIEW-STYLE WORKSPACE</div>',
                     unsafe_allow_html=True)
         tool1, tool2, tool3 = st.columns([1.0, 1.5, 1.0])
@@ -250,7 +250,8 @@ if df is not None and not df.empty:
             },
             key=f"chart-{symbol}-{timeframe}-{zone_engine}-{show_volume}-{chart_style}-{','.join(indicators)}-{show_chart_zones}"
         )
-    with book_col:
+    depth_col, tape_col = st.columns(2, gap="small")
+    with depth_col:
         st.markdown('<div class="small-label">ORDER BOOK · L2</div>', unsafe_allow_html=True)
         if book:
             asks = sorted(book.get("sell", []), key=lambda x: float(x.get("price", 0)))[:10]
@@ -266,6 +267,7 @@ if df is not None and not df.empty:
                 st.metric("BID / ASK SPREAD", f"{spread:,.2f}")
         else:
             st.info("Order book temporarily unavailable.")
+    with tape_col:
         st.markdown('<div class="small-label">RECENT TRADES</div>', unsafe_allow_html=True)
         if trades:
             rows = []
