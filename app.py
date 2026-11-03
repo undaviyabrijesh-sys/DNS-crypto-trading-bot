@@ -8,6 +8,7 @@ import streamlit as st
 from dns_bot.delta_data import fetch_delta_history
 from dns_bot.delta_market import fetch_ticker, fetch_orderbook, fetch_recent_trades
 from dns_bot.zones import detect_fvg_zones, detect_base_leg_zones, track_zone_lifecycle
+from dns_bot.structure_zones import detect_structure_zones
 from dns_bot.journal import load_trades, learning_report
 
 
@@ -74,6 +75,8 @@ def get_zones(df: pd.DataFrame, engine: str):
         found.extend(detect_fvg_zones(df))
     if engine in ("Both", "Base / Leg"):
         found.extend(detect_base_leg_zones(df))
+    if engine in ("Both", "Structure / DNS"):
+        found.extend(detect_structure_zones(df))
     return track_zone_lifecycle(df, found)
 
 
@@ -164,7 +167,7 @@ with st.sidebar:
     timeframe = st.selectbox("TIMEFRAME", ["1m", "3m", "5m", "15m", "30m", "1h", "4h"], index=3)
     candle_count = st.select_slider("CHART HISTORY", options=[250, 500, 750, 1000, 1500, 1999], value=1500)
     st.caption("15m chart: 1,500 candles ≈ 15.6 days")
-    zone_engine = st.selectbox("SUPPLY / DEMAND OVERLAY", ["Both", "FVG", "Base / Leg", "Off"])
+    zone_engine = st.selectbox("SUPPLY / DEMAND OVERLAY", ["Structure / DNS", "Both", "FVG", "Base / Leg", "Off"], index=0)
     show_volume = st.toggle("Show volume", value=True)
     refresh = st.button("↻  REFRESH MARKET", use_container_width=True, type="primary")
     st.markdown("---")
@@ -244,17 +247,14 @@ if df is not None and not df.empty:
                                         default=["EMA 20", "EMA 50"], key="chart-indicators")
         with tool3:
             show_chart_zones = st.toggle("Show zones", value=True, key="chart-zones")
-        # Keep every detected zone in the watchlist. On the chart, show only
-        # the three strongest individual demand zones and three strongest supply
-        # zones. Do not merge zones: selection only reduces visual clutter.
-        chart_zones = []
-        for side in ("demand", "supply"):
-            side_zones = [z for z in zones if str(z.kind).lower() == side]
-            chart_zones.extend(sorted(
-                [z for z in side_zones if z.status != "broken"],
-                key=lambda z: (float(z.score), float(z.strength), str(z.created_at)),
-                reverse=True
-            )[:3])
+        # Keep the full list in the watchlist; render only the five highest-ranked
+        # live zones on the chart to keep the market view readable.
+        chart_zones = sorted(
+            [z for z in zones if z.status not in ("broken", "invalid")],
+            key=lambda z: (float(z.score), float(z.strength),
+                           1 if z.status == "fresh" else 0, str(z.created_at)),
+            reverse=True,
+        )[:5]
         st.plotly_chart(
             build_chart(df, chart_zones, show_volume, chart_style, indicators, show_chart_zones),
             use_container_width=True,
