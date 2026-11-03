@@ -102,4 +102,18 @@ def _daily_curve_position(df: pd.DataFrame) -> pd.Series:
     )
     width = (aligned["prior_high"] - aligned["prior_low"]).replace(0, np.nan)
     return ((aligned["close"] - aligned["prior_low"]) / width).set_axis(df.index)
+    variants = {
+        "strict_3R": {"target_r": 3.0, "min_score": args.min_score + 10},
+        "balanced_2R": {"target_r": 2.0, "min_score": args.min_score},
+        "looser_2R": {"target_r": 2.0, "min_score": max(0, args.min_score - 20)},
+    }
+    comparison = {}
+    for name, config in variants.items():
+        trades, metrics = run_backtest(
+            df, symbol=args.symbol, min_score=config["min_score"],
+            target_r=config["target_r"]
+        )
+        trades.to_csv(out / f"{name}_trades.csv", index=False)
+        comparison[name] = metrics
+    (out / "metrics.json").write_text(json.dumps(comparison, indent=2))
 
