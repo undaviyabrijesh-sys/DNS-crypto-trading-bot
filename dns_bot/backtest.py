@@ -83,17 +83,36 @@ def _trend_flags(df: pd.DataFrame) -> pd.Series:
     return aligned["trend"].fillna(False).astype(bool).set_axis(df.index)
 
 
+def _daily_curve_position(df: pd.DataFrame) -> pd.Series:
+    """Position inside prior 20 completed daily bars' high-low curve."""
+    daily = df.set_index("timestamp").resample("1D").agg(
+        {"high": "max", "low": "min", "close": "last"}
+    ).dropna()
+    prior_high = daily["high"].rolling(20, min_periods=5).max().shift(1)
+    prior_low = daily["low"].rolling(20, min_periods=5).min().shift(1)
+    curve = (daily["close"] - prior_low) / (prior_high - prior_low).replace(0, np.nan)
+    curve = pd.DataFrame({"daily_time": daily.index, "curve": curve.values}).dropna()
+    aligned = pd.merge_asof(
+        df[["timestamp"]].sort_values("timestamp"),
+        curve.sort_values("daily_time"),
+        left_on="timestamp", right_on="daily_time", direction="backward"
+    )
+    return aligned["curve"].set_axis(df.index)
+
+
 def _zone_bounds(zone):
     return min(zone.proximal, zone.distal), max(zone.proximal, zone.distal)
 
 
-def _zone_score(zone, aligned: bool, overlapping: bool, atr_pct: float) -> int:
+def _zone_score(zone, aligned: bool, overlapping: bool, original: bool,
+                in_curve_location: bool, atr_pct: float) -> int:
     # Transparent rule score, not a trained probability.
-    score = 30  # fresh at the time it is first detected
-    score += 25 if zone.strength >= 0.65 else 12 if zone.strength >= 0.45 else 0
-    score += 20 if aligned else 0
+    score = 25  # fresh on its first retest
+    score += 20 if zone.strength >= 0.65 else 10 if zone.strength >= 0.45 else 0
+    score += 15 if aligned else 0
     score += 15 if overlapping else 0
-    score += 10 if atr_pct < 0.025 else 0
+    score += 10 if original else 0
+    score += 15 if in_curve_location else 0
     return score
 
 
@@ -102,10 +121,10 @@ def run_backtest(
     symbol: str = "BTC/USDT",
     fee_bps: float = 5.0,
     slippage_bps: float = 2.0,
-    target_r: float = 2.0,
+    target_r: float = 3.0,
     min_score: int = 50,
     max_bars_in_trade: int = 96,
-    max_zone_touches: int = 2,
+    max_zone_touches: int = 1,
 ) -> tuple[pd.DataFrame, dict]:
     """Causal, one-position-at-a-time OHLC backtest.
 
@@ -122,6 +141,7 @@ def run_backtest(
     data = df.copy().reset_index(drop=True)
     data["atr"] = (data["high"] - data["low"]).rolling(14).mean()
     data["trend_up"] = _trend_flags(data)
+    data["curve_position"] = _daily_curve_position(data)
     active, seen = [], set()
     trades: list[Trade] = []
     position = None
@@ -216,12 +236,24 @@ def run_backtest(
                 # Nearby same-direction zones add confluence, using only known zones.
                 overlapping = any(
                     other is not state and other["zone"].kind == z.kind
-                    and abs(other["zone"].proximal - z.proximal) / max(abs(z.proximal), 1e-9) < 0.002
+                    and max(_zone_bounds(other["zone"])[0], lo)
+                        <= min(_zone_bounds(other["zone"])[1], hi)
                     for other in active
                 )
+                original = not any(
+                    other is not state and other["zone"].kind == z.kind
+                    and max(_zone_bounds(other["zone"])[0], lo)
+                        <= min(_zone_bounds(other["zone"])[1], hi)
+                    for other in active
+                )
+                curve_pos = row["curve_position"]
+                in_curve_location = (
+                    pd.notna(curve_pos) and
+                    (float(curve_pos) <= 0.50 if z.kind == "demand" else float(curve_pos) >= 0.50)
+                )
                 atr_pct = atr / max(float(row["close"]), 1e-9)
-                score = _zone_score(z, aligned, overlapping, atr_pct)
-                if score >= min_score and (aligned or score >= min_score + 15):
+                score = _zone_score(z, aligned, overlapping, original, in_curve_location, atr_pct)
+                if score >= min_score and in_curve_location:
                     pending = {
                         "side": "long" if z.kind == "demand" else "short",
                         "stop": stop, "zone": z, "score": score,
