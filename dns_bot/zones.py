@@ -193,74 +193,50 @@ def detect_base_leg_zones(df: pd.DataFrame, max_base: int = 6, range_lookback: i
                     created_index=confirm_index,
                 ))
 
-    # Collapse heavily overlapping same-side zones into one cluster. This
-    # removes stacks of nearly identical supply boxes while preserving a
-    # distinct swing candle when it is not actually overlapping the cluster.
-    zones.sort(key=lambda z: (z.kind, min(z.proximal, z.distal)))
-    clustered: list[Zone] = []
-    for zone in zones:
-        z_low, z_high = sorted((float(zone.proximal), float(zone.distal)))
-        match = None
-        for existing in reversed(clustered):
-            if existing.kind != zone.kind:
-                continue
-            e_low, e_high = sorted((float(existing.proximal), float(existing.distal)))
-            overlap = max(0.0, min(z_high, e_high) - max(z_low, e_low))
-            smaller_width = max(1e-12, min(z_high - z_low, e_high - e_low))
-            if overlap / smaller_width >= 0.60:
-                match = existing
-                break
-        if match is None:
-            clustered.append(zone)
-            continue
-        m_low, m_high = sorted((float(match.proximal), float(match.distal)))
-        merged_low, merged_high = min(m_low, z_low), max(m_high, z_high)
-        # Keep the strongest origin metadata while using the union of
-        # overlapping price boundaries to represent the shared zone cluster.
-        if zone.strength > match.strength:
-            match.pattern = zone.pattern if zone.pattern.startswith("SWING_") else "ZONE_CLUSTER"
-            match.strength = zone.strength
-        elif match.pattern != zone.pattern and not match.pattern.startswith("SWING_"):
-            match.pattern = "ZONE_CLUSTER"
-        match.proximal = merged_high if match.kind == "demand" else merged_low
-        match.distal = merged_low if match.kind == "demand" else merged_high
-        match.base_start = min(match.base_start, zone.base_start)
-        match.base_end = min(match.base_end, zone.base_end)
-        match.created_index = min(match.created_index, zone.created_index)
-        match.created_at = min(match.created_at, zone.created_at)
-
-    zones = clustered
-
-    # Higher-timeframe charts can produce many nearby base/leg detections around
-    # one broad swing. Keep one representative origin per local price cluster.
+    # Keep one representative origin per structure cluster. Swing-origin
+    # candidates rank first, then displacement strength. Never widen the winning
+    # candle's full high-low range by taking the union of nearby boxes.
     typical_range = float(ranges.tail(min(len(ranges), range_lookback)).median())
-    merge_distance = max(typical_range * 2.0, 1e-12)
-    consolidated: list[Zone] = []
-    priority_order = sorted(
+    ranked = sorted(
         zones,
         key=lambda z: (
             1 if str(z.pattern).startswith("SWING_") else 0,
             float(z.strength),
-            float(z.score),
         ),
         reverse=True,
     )
-    for zone in priority_order:
+    consolidated: list[Zone] = []
+    for zone in ranked:
         z_low, z_high = sorted((float(zone.proximal), float(zone.distal)))
         z_mid = (z_low + z_high) / 2.0
-        nearby = False
+        is_swing = str(zone.pattern).startswith("SWING_")
+        duplicate = False
         for kept in consolidated:
             if kept.kind != zone.kind:
                 continue
             k_low, k_high = sorted((float(kept.proximal), float(kept.distal)))
             k_mid = (k_low + k_high) / 2.0
             overlap = max(0.0, min(z_high, k_high) - max(z_low, k_low))
-            min_width = max(1e-12, min(z_high - z_low, k_high - k_low))
-            if overlap / min_width >= 0.35 or abs(z_mid - k_mid) <= merge_distance:
-                nearby = True
+            smaller_width = max(1e-12, min(z_high - z_low, k_high - k_low))
+            overlap_ratio = overlap / smaller_width
+            kept_is_swing = str(kept.pattern).startswith("SWING_")
+
+            # True overlapping duplicates are consolidated. In addition,
+            # suppress minor base/leg zones close to a major swing origin.
+            # Two distinct swing origins are only consolidated when extremely
+            # close, so separate structural levels remain visible.
+            near_major = (
+                (is_swing != kept_is_swing and
+                 abs(z_mid - k_mid) <= typical_range * 0.90)
+                or (is_swing and kept_is_swing and
+                    abs(z_mid - k_mid) <= typical_range * 0.45)
+            )
+            if overlap_ratio >= 0.60 or near_major:
+                duplicate = True
                 break
-        if not nearby:
+        if not duplicate:
             consolidated.append(zone)
+
     zones = consolidated
 
     unique: dict[tuple, Zone] = {}
