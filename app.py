@@ -7,7 +7,7 @@ import streamlit as st
 
 from dns_bot.delta_data import fetch_delta_history
 from dns_bot.delta_market import fetch_ticker, fetch_orderbook, fetch_recent_trades
-from dns_bot.zones import detect_fvg_zones, detect_base_leg_zones
+from dns_bot.zones import detect_fvg_zones, detect_base_leg_zones, track_zone_lifecycle
 from dns_bot.journal import load_trades, learning_report
 
 
@@ -74,7 +74,7 @@ def get_zones(df: pd.DataFrame, engine: str):
         found.extend(detect_fvg_zones(df))
     if engine in ("Both", "Base / Leg"):
         found.extend(detect_base_leg_zones(df))
-    return found
+    return track_zone_lifecycle(df, found)
 
 
 def build_chart(df: pd.DataFrame, zones: list, show_volume: bool = True,
@@ -118,9 +118,11 @@ def build_chart(df: pd.DataFrame, zones: list, show_volume: bool = True,
 
     if show_zones:
         for zone in zones:
+            if zone.status == "broken":
+                continue
             demand = zone.kind == "demand"
             color = "rgba(14,203,129,.10)" if demand else "rgba(246,70,93,.10)"
-            edge = "rgba(14,203,129,.48)" if demand else "rgba(246,70,93,.48)"
+            edge = "rgba(14,203,129,.62)" if demand else "rgba(246,70,93,.62)"
             low, high = sorted((float(zone.distal), float(zone.proximal)))
             fig.add_hrect(y0=low, y1=high, fillcolor=color, line_color=edge,
                           line_width=1, layer="below", row=1, col=1)
@@ -249,8 +251,8 @@ if df is not None and not df.empty:
         for side in ("demand", "supply"):
             side_zones = [z for z in zones if str(z.kind).lower() == side]
             chart_zones.extend(sorted(
-                side_zones,
-                key=lambda z: (float(z.strength), str(z.created_at)),
+                [z for z in side_zones if z.status != "broken"],
+                key=lambda z: (float(z.score), float(z.strength), str(z.created_at)),
                 reverse=True
             )[:3])
         st.plotly_chart(
@@ -304,7 +306,10 @@ if df is not None and not df.empty:
             rows = [{
                 "SIDE": z.kind.upper(), "PATTERN": z.pattern, "SOURCE": z.method.upper(),
                 "PROXIMAL": round(float(z.proximal), 2), "DISTAL": round(float(z.distal), 2),
-                "STRENGTH": round(float(z.strength), 3), "STATUS": z.status.upper(),
+                "STRENGTH": round(float(z.strength), 3),
+                "SCORE": round(float(z.score), 3),
+                "DEFENDED RETESTS": int(z.defended_retests),
+                "TOUCHES": int(z.touches), "STATUS": z.status.upper(),
                 "FORMED": z.created_at,
             } for z in sorted(zones, key=lambda x: x.created_at, reverse=True)]
             st.dataframe(rows, use_container_width=True, hide_index=True)
