@@ -72,9 +72,15 @@ def _trend_flags(df: pd.DataFrame) -> pd.Series:
         {"open": "first", "high": "max", "low": "min", "close": "last", "volume": "sum"}
     ).dropna()
     htf["trend"] = htf["close"] > htf["close"].shift(20)
-    # Shift one 4h bar so a lower-timeframe candle never sees a still-forming HTF bar.
+    # A 4h bar's value becomes usable only after that bar has closed.
     htf["trend"] = htf["trend"].shift(1).fillna(False)
-    return df["timestamp"].map(htf["trend"]).fillna(False).astype(bool)
+    htf = htf.rename_axis("htf_time").reset_index()
+    aligned = pd.merge_asof(
+        df[["timestamp"]].sort_values("timestamp"),
+        htf[["htf_time", "trend"]].sort_values("htf_time"),
+        left_on="timestamp", right_on="htf_time", direction="backward"
+    )
+    return aligned["trend"].fillna(False).astype(bool).set_axis(df.index)
 
 
 def _zone_bounds(zone):
@@ -126,8 +132,11 @@ def run_backtest(
         stamp = str(row["timestamp"])
 
         # Detect zones using only data available at this candle close.
-        prefix = data.iloc[:i + 1]
-        found = detect_fvg_zones(prefix) + detect_base_leg_zones(prefix)
+        # The detectors need only the last three candles (FVG) or the
+        # rolling median + five-candle base window (base/leg). Keeping this
+        # bounded makes a year of 15m data tractable and remains causal.
+        prefix = data.iloc[max(0, i - 25):i + 1]
+        found = detect_fvg_zones(prefix.tail(3)) + detect_base_leg_zones(prefix)
         for z in found:
             key = (z.kind, z.method, z.created_at, round(z.proximal, 8), round(z.distal, 8))
             if key not in seen and z.created_at == stamp:
