@@ -387,11 +387,11 @@ if df is not None and not df.empty:
         else:
             st.info("No trade plans saved in this session yet.")
 
-    with lower_tabs[1]:
+    with lower_tabs[2]:
         st.markdown("**Latest completed candles**")
         st.dataframe(df.tail(30).sort_values("timestamp", ascending=False),
                      use_container_width=True, hide_index=True)
-    with lower_tabs[2]:
+    with lower_tabs[3]:
         st.markdown("**Trade performance & learning**")
         uploaded = st.file_uploader("Upload backtest trade CSV", type=["csv"], key="journal-upload")
         if uploaded is not None:
@@ -412,7 +412,7 @@ if df is not None and not df.empty:
                 st.error(f"Journal error: {exc}")
         else:
             st.caption("Upload the backtest trade CSV to inspect the strategy's measured performance.")
-    with lower_tabs[3]:
+    with lower_tabs[4]:
         st.warning("Read-only research terminal. No order entry, account balance, positions or private account data are connected.")
         st.write("Data sources: Delta public OHLC candles, ticker, L2 order book and public trades.")
         if market_errors:
