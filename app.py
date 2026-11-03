@@ -127,15 +127,33 @@ def build_chart(df: pd.DataFrame, zones: list, show_volume: bool = True,
                              name="Volume", showlegend=False), row=2, col=1)
 
     if show_zones:
+        # Draw each zone as a price-bounded rectangle beginning at the candle
+        # where its base formed. Do not use add_hrect: that paints the band
+        # across the entire chart and hides the zone's actual origin.
         for zone in zones:
             if zone.status == "broken":
                 continue
             demand = zone.kind == "demand"
-            color = "rgba(14,203,129,.10)" if demand else "rgba(246,70,93,.10)"
-            edge = "rgba(14,203,129,.62)" if demand else "rgba(246,70,93,.62)"
+            color = "rgba(14,203,129,.12)" if demand else "rgba(246,70,93,.12)"
+            edge = "rgba(14,203,129,.78)" if demand else "rgba(246,70,93,.78)"
             low, high = sorted((float(zone.distal), float(zone.proximal)))
-            fig.add_hrect(y0=low, y1=high, fillcolor=color, line_color=edge,
-                          line_width=1, layer="below", row=1, col=1)
+            start_idx = max(0, min(len(df) - 1, int(zone.base_start)))
+            x0 = df.timestamp.iloc[start_idx]
+            x1 = df.timestamp.iloc[-1]
+            if x0 >= x1:
+                continue
+            fig.add_shape(
+                type="rect", x0=x0, x1=x1, y0=low, y1=high,
+                xref="x", yref="y", fillcolor=color,
+                line=dict(color=edge, width=1), layer="below",
+            )
+            label = f"{'DEMAND' if demand else 'SUPPLY'} · {zone.pattern}"
+            fig.add_annotation(
+                x=x0, y=high if demand else low, xref="x", yref="y",
+                text=label, showarrow=False, xanchor="left",
+                yanchor="bottom" if demand else "top",
+                font=dict(size=8, color=edge), bgcolor="rgba(11,14,17,.72)",
+            )
 
     last = float(df.close.iloc[-1])
     fig.add_hline(y=last, line_dash="dot", line_color="#00c2ff", line_width=1,
