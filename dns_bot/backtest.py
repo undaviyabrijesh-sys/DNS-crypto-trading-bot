@@ -249,7 +249,10 @@ def run_backtest(
                 in_curve = (pd.notna(curve) and
                             (float(curve) <= 0.50 if side == "long" else float(curve) >= 0.50))
                 score = _zone_score(zone, aligned, overlapping, original, bool(in_curve))
-                if score >= min_score and in_curve:
+                trend_ok = aligned or (
+                    zone.pattern in ("DBR", "RBD") and score >= min_score + 15
+                )
+                if score >= min_score and in_curve and trend_ok:
                     pending = {"side": side, "stop": stop, "zone": zone, "score": score,
                                "aligned": aligned, "touch_number": state["touches"]}
                 state["touch_idx"] = None
