@@ -3,7 +3,6 @@ from __future__ import annotations
 from dataclasses import dataclass, asdict
 from typing import Literal
 
-import numpy as np
 import pandas as pd
 
 ZoneType = Literal["demand", "supply"]
@@ -110,7 +109,10 @@ def detect_base_leg_zones(
                 proximal = float(base[["open", "close"]].min(axis=1).min())
                 distal = float(base["high"].max())
 
-            if proximal <= distal:
+            # Demand proximal is above distal; supply proximal is below distal.
+            if kind == "demand" and proximal <= distal:
+                continue
+            if kind == "supply" and proximal >= distal:
                 continue
             strength = min(1.0, _body_ratio(leg_out) * min(out_range / float(median), 2.0) / 2.0)
             stamp = str(df.iloc[leg_out_idx].get("timestamp", leg_out_idx))
