@@ -16,7 +16,7 @@ market_tab, journal_tab = st.tabs(["Market desk", "Trade journal & learning"])
 with market_tab:
     with st.sidebar:
         st.header("Market")
-        exchange_id = st.selectbox("Exchange", ["binance", "bybit", "okx"], index=0)
+        exchange_id = st.selectbox("Exchange", ["okx", "bybit", "binance"], index=0)
         symbol = st.selectbox("Pair", ["BTC/USDT", "ETH/USDT"])
         timeframe = st.selectbox("Timeframe", ["1m", "3m", "5m", "15m", "1h", "4h"], index=3)
         limit = st.slider("Candles", 100, 1000, 500, 50)
