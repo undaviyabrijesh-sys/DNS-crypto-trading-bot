@@ -67,44 +67,83 @@ def timeframe_minutes(tf: str) -> int:
     return 1440
 
 
-def build_chart(df: pd.DataFrame, zones: list, show_volume: bool = True):
+def build_chart(df: pd.DataFrame, zones: list, show_volume: bool = True,
+                chart_style: str = "Candles", indicators: list[str] | None = None,
+                show_zones: bool = True):
+    """TradingView-inspired interactive chart with editable drawing tools."""
     rows = 2 if show_volume else 1
-    heights = [0.78, 0.22] if show_volume else [1]
+    heights = [0.80, 0.20] if show_volume else [1]
     fig = make_subplots(rows=rows, cols=1, shared_xaxes=True, vertical_spacing=.025,
                         row_heights=heights)
-    fig.add_trace(go.Candlestick(
-        x=df.timestamp, open=df.open, high=df.high, low=df.low, close=df.close,
-        name="BTCUSD", increasing_line_color="#0ecb81", decreasing_line_color="#f6465d",
-        increasing_fillcolor="#0ecb81", decreasing_fillcolor="#f6465d",
-    ), row=1, col=1)
+
+    if chart_style == "Candles":
+        fig.add_trace(go.Candlestick(
+            x=df.timestamp, open=df.open, high=df.high, low=df.low, close=df.close,
+            name="BTCUSD", increasing_line_color="#0ecb81", decreasing_line_color="#f6465d",
+            increasing_fillcolor="#0ecb81", decreasing_fillcolor="#f6465d",
+        ), row=1, col=1)
+    elif chart_style == "Line":
+        fig.add_trace(go.Scatter(x=df.timestamp, y=df.close, mode="lines", name="Close",
+                                 line=dict(color="#d8dee9", width=1.6)), row=1, col=1)
+    else:
+        fig.add_trace(go.Scatter(x=df.timestamp, y=df.close, mode="lines", name="Close",
+                                 line=dict(color="#00c2ff", width=1.6),
+                                 fill="tozeroy", fillcolor="rgba(0,194,255,.08)"), row=1, col=1)
+
+    ema_colors = {"EMA 9": "#f0b90b", "EMA 20": "#00c2ff",
+                  "EMA 50": "#b084f5", "EMA 200": "#ff8a65"}
+    for label in indicators or []:
+        period = int(label.split()[-1])
+        if len(df) >= period:
+            ema = df.close.ewm(span=period, adjust=False).mean()
+            fig.add_trace(go.Scatter(x=df.timestamp, y=ema, mode="lines", name=label,
+                                     line=dict(color=ema_colors.get(label, "#ffffff"), width=1.25)),
+                          row=1, col=1)
+
     if show_volume and "volume" in df:
         volume_colors = ["#0ecb8180" if c >= o else "#f6465d80"
                          for o, c in zip(df.open, df.close)]
         fig.add_trace(go.Bar(x=df.timestamp, y=df.volume, marker_color=volume_colors,
                              name="Volume", showlegend=False), row=2, col=1)
-    for zone in zones[-35:]:
-        demand = zone.kind == "demand"
-        color = "rgba(14,203,129,.12)" if demand else "rgba(246,70,93,.12)"
-        edge = "rgba(14,203,129,.55)" if demand else "rgba(246,70,93,.55)"
-        low, high = sorted((float(zone.distal), float(zone.proximal)))
-        fig.add_hrect(y0=low, y1=high, fillcolor=color, line_color=edge,
-                      line_width=1, layer="below", row=1, col=1)
+
+    if show_zones:
+        for zone in zones:
+            demand = zone.kind == "demand"
+            color = "rgba(14,203,129,.10)" if demand else "rgba(246,70,93,.10)"
+            edge = "rgba(14,203,129,.48)" if demand else "rgba(246,70,93,.48)"
+            low, high = sorted((float(zone.distal), float(zone.proximal)))
+            fig.add_hrect(y0=low, y1=high, fillcolor=color, line_color=edge,
+                          line_width=1, layer="below", row=1, col=1)
+
     last = float(df.close.iloc[-1])
     fig.add_hline(y=last, line_dash="dot", line_color="#00c2ff", line_width=1,
                   annotation_text=f"{last:,.1f}", annotation_position="right",
                   row=1, col=1)
     fig.update_layout(
-        height=660, template="plotly_dark", paper_bgcolor="#0b0e11", plot_bgcolor="#0b0e11",
-        margin=dict(l=5, r=5, t=8, b=5), xaxis_rangeslider_visible=False,
+        height=700, template="plotly_dark", paper_bgcolor="#0b0e11", plot_bgcolor="#0b0e11",
+        margin=dict(l=5, r=5, t=8, b=5),
         font=dict(family="Inter", color="#aeb7c2", size=10),
-        hovermode="x unified", showlegend=False,
-        xaxis=dict(showgrid=True, gridcolor="#1d232d", rangeslider_visible=False),
-        yaxis=dict(side="right", showgrid=True, gridcolor="#1d232d", fixedrange=False),
-        xaxis2=dict(showgrid=True, gridcolor="#1d232d"),
+        hovermode="x unified", showlegend=bool(indicators),
+        legend=dict(orientation="h", y=1.02, x=0, bgcolor="rgba(0,0,0,0)"),
+        dragmode="pan", uirevision="salty-trades-chart",
+        xaxis=dict(showgrid=True, gridcolor="#1d232d", rangeslider_visible=False,
+                   showspikes=True, spikemode="across", spikesnap="cursor",
+                   rangeselector=dict(bgcolor="#131722", activecolor="#263747",
+                       font=dict(color="#aeb7c2", size=9),
+                       buttons=[
+                           dict(count=1, label="1H", step="hour", stepmode="backward"),
+                           dict(count=4, label="4H", step="hour", stepmode="backward"),
+                           dict(count=1, label="1D", step="day", stepmode="backward"),
+                           dict(count=7, label="1W", step="day", stepmode="backward"),
+                           dict(count=1, label="1M", step="month", stepmode="backward"),
+                           dict(step="all", label="ALL"),
+                       ])),
+        yaxis=dict(side="right", showgrid=True, gridcolor="#1d232d",
+                   fixedrange=False, showspikes=True),
+        xaxis2=dict(showgrid=True, gridcolor="#1d232d", showspikes=True),
         yaxis2=dict(side="right", showgrid=True, gridcolor="#1d232d"),
     )
     return fig
-
 
 with st.sidebar:
     st.markdown("## ◈ SALTY TRADES")
@@ -187,10 +226,30 @@ if df is not None and not df.empty:
     with chart_col:
         st.markdown('<div class="small-label">PRICE CHART · TRADINGVIEW-STYLE WORKSPACE</div>',
                     unsafe_allow_html=True)
-        st.plotly_chart(build_chart(df, zones, show_volume), use_container_width=True,
-                        config={"displaylogo": False, "scrollZoom": True,
-                                "modeBarButtonsToRemove": ["select2d", "lasso2d"]},
-                        key=f"chart-{symbol}-{timeframe}-{zone_engine}-{show_volume}")
+        tool1, tool2, tool3 = st.columns([1.0, 1.5, 1.0])
+        with tool1:
+            chart_style = st.selectbox("CHART TYPE", ["Candles", "Line", "Area"],
+                                       index=0, key="chart-style")
+        with tool2:
+            indicators = st.multiselect("INDICATORS", ["EMA 9", "EMA 20", "EMA 50", "EMA 200"],
+                                        default=["EMA 20", "EMA 50"], key="chart-indicators")
+        with tool3:
+            show_chart_zones = st.toggle("Show zones", value=True, key="chart-zones")
+        st.plotly_chart(
+            build_chart(df, zones, show_volume, chart_style, indicators, show_chart_zones),
+            use_container_width=True,
+            config={
+                "displaylogo": False, "scrollZoom": True, "doubleClick": "reset",
+                "editable": True,
+                "modeBarButtonsToAdd": [
+                    "drawline", "drawopenpath", "drawrect", "drawcircle",
+                    "drawclosedpath", "eraseshape"
+                ],
+                "modeBarButtonsToRemove": ["select2d", "lasso2d"],
+                "toImageButtonOptions": {"format": "png", "filename": "salty-trades-chart"}
+            },
+            key=f"chart-{symbol}-{timeframe}-{zone_engine}-{show_volume}-{chart_style}-{','.join(indicators)}-{show_chart_zones}"
+        )
     with book_col:
         st.markdown('<div class="small-label">ORDER BOOK · L2</div>', unsafe_allow_html=True)
         if book:
