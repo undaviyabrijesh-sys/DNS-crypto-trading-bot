@@ -151,6 +151,85 @@ def detect_base_leg_zones(df: pd.DataFrame, max_base: int = 6, range_lookback: i
                               strength, pattern, created_index=leg_end))
             seen.add((start, end))
 
+    # Swing-origin zones: a confirmed pivot candle contributes its FULL
+    # high-low range, matching discretionary swing-high/swing-low marking.
+    # Require a meaningful departure so every tiny pivot is not promoted.
+    left_right = 2
+    departure_bars = 3
+    for pivot in range(left_right, len(df) - left_right):
+        row = df.iloc[pivot]
+        pivot_high, pivot_low = float(row["high"]), float(row["low"])
+        local = df.iloc[pivot - left_right:pivot + left_right + 1]
+        median = median_ranges.iloc[pivot]
+        if pd.isna(median) or float(median) <= 0:
+            continue
+
+        is_swing_high = pivot_high >= float(local["high"].max())
+        is_swing_low = pivot_low <= float(local["low"].min())
+        confirm_index = pivot + left_right
+        departure_end = min(len(df) - 1, pivot + departure_bars)
+        after = df.iloc[pivot + 1:departure_end + 1]
+        if after.empty:
+            continue
+
+        stamp = str(row.get("timestamp", pivot))
+        if is_swing_high:
+            departure = pivot_low - float(after["close"].min())
+            if departure >= float(median) * 1.5:
+                strength = min(1.0, departure / max(float(median) * 4.0, 1e-12))
+                zones.append(Zone(
+                    "supply", "base_leg", pivot_high, pivot_low, stamp,
+                    pivot, pivot, strength, "SWING_HIGH",
+                    created_index=confirm_index,
+                ))
+        if is_swing_low:
+            departure = float(after["close"].max()) - pivot_high
+            if departure >= float(median) * 1.5:
+                strength = min(1.0, departure / max(float(median) * 4.0, 1e-12))
+                zones.append(Zone(
+                    "demand", "base_leg", pivot_high, pivot_low, stamp,
+                    pivot, pivot, strength, "SWING_LOW",
+                    created_index=confirm_index,
+                ))
+
+    # Collapse heavily overlapping same-side zones into one cluster. This
+    # removes stacks of nearly identical supply boxes while preserving a
+    # distinct swing candle when it is not actually overlapping the cluster.
+    zones.sort(key=lambda z: (z.kind, min(z.proximal, z.distal)))
+    clustered: list[Zone] = []
+    for zone in zones:
+        z_low, z_high = sorted((float(zone.proximal), float(zone.distal)))
+        match = None
+        for existing in reversed(clustered):
+            if existing.kind != zone.kind:
+                continue
+            e_low, e_high = sorted((float(existing.proximal), float(existing.distal)))
+            overlap = max(0.0, min(z_high, e_high) - max(z_low, e_low))
+            smaller_width = max(1e-12, min(z_high - z_low, e_high - e_low))
+            if overlap / smaller_width >= 0.60:
+                match = existing
+                break
+        if match is None:
+            clustered.append(zone)
+            continue
+        m_low, m_high = sorted((float(match.proximal), float(match.distal)))
+        merged_low, merged_high = min(m_low, z_low), max(m_high, z_high)
+        # Keep the strongest origin metadata while using the union of
+        # overlapping price boundaries to represent the shared zone cluster.
+        if zone.strength > match.strength:
+            match.pattern = zone.pattern if zone.pattern.startswith("SWING_") else "ZONE_CLUSTER"
+            match.strength = zone.strength
+        elif match.pattern != zone.pattern and not match.pattern.startswith("SWING_"):
+            match.pattern = "ZONE_CLUSTER"
+        match.proximal = merged_high if match.kind == "demand" else merged_low
+        match.distal = merged_low if match.kind == "demand" else merged_high
+        match.base_start = min(match.base_start, zone.base_start)
+        match.base_end = min(match.base_end, zone.base_end)
+        match.created_index = min(match.created_index, zone.created_index)
+        match.created_at = min(match.created_at, zone.created_at)
+
+    zones = clustered
+
     unique: dict[tuple, Zone] = {}
     for zone in zones:
         key = (zone.kind, round(zone.proximal, 8), round(zone.distal, 8),
