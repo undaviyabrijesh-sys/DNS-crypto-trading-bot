@@ -61,36 +61,73 @@ def _body_ratio(row: pd.Series) -> float:
     return abs(float(row["close"] - row["open"])) / candle_range if candle_range > 0 else 0.0
 
 
-def detect_base_leg_zones(df: pd.DataFrame, max_base: int = 5, range_lookback: int = 20,
-                          leg_body_ratio: float = 0.75, base_body_ratio: float = 0.50,
-                          expansion: float = 1.20) -> list[Zone]:
-    """Detect DBR/RBR/RBD/DBD structures using closed OHLC candles (proxy)."""
+def detect_base_leg_zones(df: pd.DataFrame, max_base: int = 6, range_lookback: int = 20,
+                          leg_body_ratio: float = 0.60, base_body_ratio: float = 0.55,
+                          expansion: float = 1.25, max_leg_out: int = 3) -> list[Zone]:
+    """Detect compact-base zones followed by 1-3 candle displacement legs.
+
+    Unlike the first version, the outgoing displacement may take several
+    candles. This captures larger institutional-style moves that do not leave
+    in one oversized candle. Zone bounds remain anchored to the compact base.
+    """
     _valid_ohlc(df)
     if max_base < 1 or max_base > 6:
         raise ValueError("max_base must be between 1 and 6")
+    if max_leg_out < 1 or max_leg_out > 5:
+        raise ValueError("max_leg_out must be between 1 and 5")
+
     ranges = (df["high"] - df["low"]).astype(float)
     median_ranges = ranges.rolling(range_lookback, min_periods=3).median()
     zones: list[Zone] = []
     seen: set[tuple[int, int]] = set()
+
     for base_len in range(1, max_base + 1):
-        for start in range(1, len(df) - base_len):
+        for start in range(1, len(df) - base_len - 1):
             end = start + base_len - 1
-            leg_out_idx = end + 1
             if (start, end) in seen:
                 continue
+
             base = df.iloc[start:end + 1]
             if not all(_body_ratio(row) <= base_body_ratio for _, row in base.iterrows()):
                 continue
-            leg_in, leg_out = df.iloc[start - 1], df.iloc[leg_out_idx]
+
+            leg_in = df.iloc[start - 1]
             if _body_ratio(leg_in) < leg_body_ratio:
                 continue
-            out_range, median = float(ranges.iloc[leg_out_idx]), median_ranges.iloc[leg_out_idx]
-            if pd.isna(median) or out_range < float(median) * expansion:
+
+            # Find the first qualifying displacement after the base. The
+            # displacement can be one strong candle or a coordinated 2-3 bar leg.
+            selected = None
+            for horizon in range(1, max_leg_out + 1):
+                leg_end = end + horizon
+                if leg_end >= len(df):
+                    break
+                leg = df.iloc[end + 1:leg_end + 1]
+                first_open = float(leg.iloc[0]["open"])
+                last_close = float(leg.iloc[-1]["close"])
+                move = last_close - first_open
+                leg_high = float(leg["high"].max())
+                leg_low = float(leg["low"].min())
+                leg_range = leg_high - leg_low
+                median = median_ranges.iloc[leg_end]
+                if pd.isna(median) or leg_range <= 0:
+                    continue
+                net_body_ratio = abs(move) / leg_range
+                # Scale the required move with the number of candles, while
+                # remaining sensitive to a genuine multi-candle impulse.
+                required_move = float(median) * expansion * (horizon ** 0.5)
+                if abs(move) < required_move or net_body_ratio < leg_body_ratio:
+                    continue
+                selected = (leg_end, move, leg_range, float(median), net_body_ratio)
+                break
+
+            if selected is None:
                 continue
-            if _body_ratio(leg_out) < leg_body_ratio:
-                continue
+
+            leg_end, move, leg_range, median, net_body_ratio = selected
             in_up = float(leg_in["close"]) > float(leg_in["open"])
-            out_up = float(leg_out["close"]) > float(leg_out["open"])
+            out_up = move > 0
+
             if out_up:
                 kind: ZoneType = "demand"
                 pattern = "RBR" if in_up else "DBR"
@@ -101,15 +138,19 @@ def detect_base_leg_zones(df: pd.DataFrame, max_base: int = 5, range_lookback: i
                 pattern = "DBD" if not in_up else "RBD"
                 proximal = float(base[["open", "close"]].min(axis=1).min())
                 distal = float(base["high"].max())
+
             if kind == "demand" and proximal <= distal:
                 continue
             if kind == "supply" and proximal >= distal:
                 continue
-            strength = min(1.0, _body_ratio(leg_out) * min(out_range / float(median), 2.0) / 2.0)
-            stamp = str(df.iloc[leg_out_idx].get("timestamp", leg_out_idx))
+
+            displacement_factor = min(1.0, abs(move) / max(median * 3.0, 1e-12))
+            strength = min(1.0, displacement_factor * net_body_ratio)
+            stamp = str(df.iloc[leg_end].get("timestamp", leg_end))
             zones.append(Zone(kind, "base_leg", proximal, distal, stamp, start, end,
-                              strength, pattern, created_index=leg_out_idx))
+                              strength, pattern, created_index=leg_end))
             seen.add((start, end))
+
     unique: dict[tuple, Zone] = {}
     for zone in zones:
         key = (zone.kind, round(zone.proximal, 8), round(zone.distal, 8),
