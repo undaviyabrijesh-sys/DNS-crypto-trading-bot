@@ -77,7 +77,7 @@ def timeframe_minutes(tf: str) -> int:
     return 1440
 
 
-@st.cache_data(ttl=300, show_spinner=False)
+@st.cache_data(ttl=30, show_spinner=False)
 def get_zones(df: pd.DataFrame, engine: str = "Base / Leg"):
     """Use only base/leg and confirmed swing-origin zones; FVG is disabled."""
     found = detect_base_leg_zones(df)
@@ -209,6 +209,8 @@ st.markdown(
 # A changed contract/timeframe always reloads the matching candle series.
 market_key = (symbol, timeframe, candle_count)
 if refresh or st.session_state.get("market_key") != market_key:
+    # Force the latest zone algorithm to run when the user refreshes the market.
+    get_zones.clear()
     st.session_state.pop("market_error", None)
     try:
         days = max(1, int((candle_count * timeframe_minutes(timeframe) + 1439) / 1440))
@@ -260,6 +262,7 @@ if df is not None and not df.empty:
         st.warning(f"Zone detection issue: {exc}")
 
     with st.container():
+        st.caption(f"ZONE ENGINE · MAJOR SWING FILTER v2 · {len(zones)} zones detected · refresh clears zone cache")
         st.markdown('<div class="small-label">PRICE CHART · TRADINGVIEW-STYLE WORKSPACE</div>',
                     unsafe_allow_html=True)
         tool1, tool2, tool3 = st.columns([1.0, 1.5, 1.0])
