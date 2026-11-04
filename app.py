@@ -28,30 +28,87 @@ st.set_page_config(page_title="SALTY TRADES | Delta Terminal", page_icon="◈", 
 
 st.markdown("""
 <style>
-:root{--bg:#0b0e11;--panel:#131722;--line:#242a35;--muted:#848e9c;--cyan:#00c2ff;--green:#0ecb81;--red:#f6465d;}
-html,body,[data-testid="stAppViewContainer"]{background:var(--bg);color:#eaecef;font-family:Inter,Arial,sans-serif;}
-[data-testid="stHeader"]{background:#0b0e11;}
-[data-testid="stSidebar"]{background:#11151d;border-right:1px solid #252b36;}
-.block-container{max-width:1900px;padding-top:.7rem;padding-bottom:1.5rem;}
-h1,h2,h3{font-family:Orbitron,Arial,sans-serif!important;color:#f0f3f7!important;}
-h1{font-size:1.3rem!important;}
-div[data-testid="stMetric"]{background:#131722;border:1px solid #252b36;border-radius:7px;padding:9px 12px;}
-[data-testid="stMetricLabel"]{color:#848e9c!important;font-size:.72rem;}
-[data-testid="stMetricValue"]{font-family:Orbitron,sans-serif;color:#eaecef!important;font-size:1.25rem;}
-div[data-testid="stTabs"] button{color:#929aa5!important;font-weight:650;}
-div[data-testid="stTabs"] button[aria-selected="true"]{color:#00c2ff!important;border-bottom:2px solid #00c2ff!important;}
-.stButton>button{background:#17202d;color:#dce3eb;border:1px solid #303a49;border-radius:5px;}
-.stButton>button:hover{border-color:#00c2ff;color:#00c2ff;}
-[data-testid="stDataFrame"]{border:1px solid #252b36;border-radius:6px;}
-hr{border-color:#252b36!important;}
-.small-label{font-size:10px;letter-spacing:1.4px;color:#848e9c;font-weight:700;margin:4px 0 9px;}
-.market-head{display:flex;align-items:center;gap:10px;padding:4px 0 10px;border-bottom:1px solid #252b36;margin-bottom:12px;}
-.market-symbol{font-family:Orbitron,sans-serif;font-size:20px;font-weight:700;color:#f0f3f7;}
-.market-tag{font-size:10px;color:#00c2ff;border:1px solid #13516a;padding:3px 7px;border-radius:4px;}
-.muted{color:#848e9c;font-size:11px;}
-.price-up{color:#0ecb81;font-weight:700}.price-down{color:#f6465d;font-weight:700}
-.panel{background:#131722;border:1px solid #252b36;border-radius:6px;padding:10px;margin-bottom:10px;}
-div[data-testid="stAlert"]{border-radius:6px;}
+:root{
+  --bg:#080b10;--panel:#101722;--panel2:#0d131c;--line:#202b38;
+  --muted:#8290a2;--text:#dce5ef;--cyan:#31c8f2;--green:#14c784;
+  --red:#f25f70;--amber:#f0b94b;--violet:#a78bfa;
+}
+html,body,[data-testid="stAppViewContainer"]{
+  background:var(--bg);color:var(--text);
+  font-family:ui-monospace,"Cascadia Code","SFMono-Regular",Consolas,monospace;
+}
+[data-testid="stHeader"]{background:rgba(8,11,16,.94);}
+[data-testid="stSidebar"]{
+  background:#0b1119;border-right:1px solid var(--line);
+}
+[data-testid="stSidebar"] *{font-family:ui-monospace,"Cascadia Code",Consolas,monospace;}
+.block-container{max-width:1920px;padding-top:.55rem;padding-bottom:1.25rem;}
+h1,h2,h3,h4{color:#edf4fb!important;font-family:ui-monospace,Consolas,monospace!important;letter-spacing:.02em;}
+h1{font-size:1.22rem!important;}
+h2{font-size:1.04rem!important;}
+h3{font-size:.94rem!important;}
+p,li,label,span,div{font-variant-numeric:tabular-nums;}
+div[data-testid="stMetric"]{
+  background:linear-gradient(145deg,#121c29,#0d141e);
+  border:1px solid #263445;border-radius:4px;padding:9px 12px;
+  box-shadow:inset 0 1px 0 rgba(255,255,255,.025);
+}
+[data-testid="stMetricLabel"]{color:var(--muted)!important;font-size:.66rem!important;letter-spacing:.09em;text-transform:uppercase;}
+[data-testid="stMetricValue"]{color:#eef6ff!important;font-family:ui-monospace,Consolas,monospace!important;font-size:1.12rem!important;}
+[data-testid="stMetricDelta"]{font-family:ui-monospace,Consolas,monospace!important;font-size:.72rem!important;}
+div[data-testid="stTabs"] button{
+  color:#8796a9!important;font-family:ui-monospace,Consolas,monospace!important;
+  font-size:.72rem!important;font-weight:700;letter-spacing:.045em;
+  border-bottom:1px solid var(--line);
+}
+div[data-testid="stTabs"] button[aria-selected="true"]{
+  color:var(--cyan)!important;border-bottom:2px solid var(--cyan)!important;
+}
+.stButton>button,.stDownloadButton>button{
+  background:#111d2a;color:#dce8f4;border:1px solid #304153;border-radius:3px;
+  font-family:ui-monospace,Consolas,monospace;font-size:.76rem;letter-spacing:.03em;
+}
+.stButton>button:hover,.stDownloadButton>button:hover{
+  border-color:var(--cyan);color:var(--cyan);background:#142536;
+}
+[data-testid="stDataFrame"]{border:1px solid #263445;border-radius:3px;}
+[data-testid="stDataFrame"] *{font-family:ui-monospace,Consolas,monospace!important;}
+[data-testid="stSelectbox"] label,[data-testid="stMultiSelect"] label,
+[data-testid="stSlider"] label,[data-testid="stNumberInput"] label,
+[data-testid="stTextInput"] label{color:#94a4b8!important;font-size:.68rem!important;letter-spacing:.06em;text-transform:uppercase;}
+hr{border-color:var(--line)!important;}
+div[data-testid="stAlert"]{border-radius:3px;border:1px solid #2b394a;}
+.small-label,.section-kicker{
+  font-size:9px;letter-spacing:1.6px;color:#7d8da1;font-weight:800;
+  margin:5px 0 9px;text-transform:uppercase;
+}
+.terminal-bar{
+  display:flex;align-items:center;justify-content:space-between;gap:12px;
+  padding:9px 12px;margin:0 0 12px;background:#0d141e;
+  border:1px solid #253344;border-left:3px solid var(--cyan);border-radius:3px;
+}
+.terminal-brand{color:#f2f7fd;font-size:13px;font-weight:900;letter-spacing:.1em;}
+.terminal-product{color:#7f91a7;font-size:9px;letter-spacing:.13em;margin-left:12px;}
+.terminal-meta{display:flex;align-items:center;gap:13px;color:#8292a6;font-size:9px;letter-spacing:.08em;}
+.terminal-dot{display:inline-block;width:7px;height:7px;background:var(--green);border-radius:50%;box-shadow:0 0 8px rgba(20,199,132,.75);margin-right:5px;}
+.terminal-pill{padding:3px 6px;border:1px solid #2a3b4e;border-radius:2px;color:#a9bbce;}
+.market-head{
+  display:flex;align-items:center;flex-wrap:wrap;gap:10px;
+  padding:2px 0 10px;border-bottom:1px solid var(--line);margin-bottom:12px;
+}
+.market-symbol{font-size:21px;font-weight:900;letter-spacing:.04em;color:#f3f7fc;}
+.market-tag{font-size:9px;color:var(--cyan);border:1px solid #15516a;padding:3px 7px;border-radius:2px;letter-spacing:.1em;}
+.muted{color:#8290a2;font-size:10px;letter-spacing:.04em;}
+.panel{background:var(--panel);border:1px solid #263445;border-radius:3px;padding:10px;margin-bottom:10px;}
+.zone-readout{
+  display:flex;flex-wrap:wrap;gap:7px;align-items:center;padding:8px 10px;
+  margin:5px 0 12px;background:#0d141e;border:1px solid #202e3d;
+  font-size:9px;letter-spacing:.08em;color:#91a2b6;
+}
+.zone-readout b{font-weight:900;}
+.zone-demand{color:var(--green)!important}.zone-supply{color:var(--red)!important}
+.zone-rbs{color:var(--cyan)!important}.zone-sbr{color:var(--amber)!important}
+[data-testid="stCaptionContainer"]{color:#7f8fa3!important;font-size:.69rem!important;}
 </style>
 """, unsafe_allow_html=True)
 
@@ -77,6 +134,13 @@ def timeframe_minutes(tf: str) -> int:
     if tf.endswith("h"):
         return int(tf[:-1]) * 60
     return 1440
+
+def zone_class(zone) -> str:
+    """Return the user-facing zone family while keeping trade direction explicit."""
+    pattern = str(getattr(zone, "pattern", "")).strip().upper()
+    if pattern in ("RBS", "SBR"):
+        return pattern
+    return "DEMAND" if str(getattr(zone, "kind", "")).lower() == "demand" else "SUPPLY"
 
 
 @st.cache_data(ttl=30, show_spinner=False)
@@ -134,10 +198,19 @@ def build_chart(df: pd.DataFrame, zones: list, show_volume: bool = True,
             if zone.status == "broken":
                 continue
             demand = zone.kind == "demand"
-            color = "rgba(14,203,129,.12)" if demand else "rgba(246,70,93,.12)"
-            edge = "rgba(14,203,129,.78)" if demand else "rgba(246,70,93,.78)"
+            family = zone_class(zone)
+            palette = {
+                "DEMAND": ("rgba(20,199,132,.10)", "rgba(20,199,132,.82)"),
+                "SUPPLY": ("rgba(242,95,112,.10)", "rgba(242,95,112,.82)"),
+                "RBS": ("rgba(49,200,242,.13)", "rgba(49,200,242,.92)"),
+                "SBR": ("rgba(240,185,75,.13)", "rgba(240,185,75,.92)"),
+            }
+            color, edge = palette[family]
             low, high = sorted((float(zone.distal), float(zone.proximal)))
-            start_idx = max(0, min(len(df) - 1, int(zone.base_start)))
+            # Flip zones begin at the candle that broke the original level,
+            # not at the much older candle that first formed that level.
+            origin_index = zone.created_index if family in ("RBS", "SBR") else zone.base_start
+            start_idx = max(0, min(len(df) - 1, int(origin_index)))
             x0 = df.timestamp.iloc[start_idx]
             x1 = df.timestamp.iloc[-1]
             if x0 >= x1:
@@ -147,7 +220,7 @@ def build_chart(df: pd.DataFrame, zones: list, show_volume: bool = True,
                 xref="x", yref="y", fillcolor=color,
                 line=dict(color=edge, width=1), layer="below",
             )
-            label = f"{'DEMAND' if demand else 'SUPPLY'} · {zone.pattern}"
+            label = f"{family} · {zone.pattern}" if family in ("DEMAND", "SUPPLY") else family
             fig.add_annotation(
                 x=x0, y=high if demand else low, xref="x", yref="y",
                 text=label, showarrow=False, xanchor="left",
@@ -274,9 +347,17 @@ with st.sidebar:
 
 # Instrument header and top-of-screen market statistics
 st.markdown(
+    '<div class="terminal-bar">'
+    '<div><span class="terminal-brand">◈ SALTY TRADES</span>'
+    '<span class="terminal-product">MARKET INTELLIGENCE TERMINAL / BUILD 02</span></div>'
+    '<div class="terminal-meta"><span><i class="terminal-dot"></i>PUBLIC MARKET FEED</span>'
+    '<span class="terminal-pill">READ ONLY</span><span>DELTA EXCHANGE INDIA</span></div></div>',
+    unsafe_allow_html=True,
+)
+st.markdown(
     f'<div class="market-head"><span class="market-symbol">{symbol}</span>'
     f'<span class="market-tag">PERPETUAL</span><span class="market-tag">DELTA INDIA</span>'
-    f'<span class="muted">USD quoted · public market feed</span></div>',
+    f'<span class="muted">USD QUOTED</span><span class="muted">1H STRUCTURE / 15M ZONES / 3M CONFIRMATION</span></div>',
     unsafe_allow_html=True,
 )
 
@@ -335,6 +416,20 @@ if df is not None and not df.empty:
     except Exception as exc:
         st.warning(f"Zone detection issue: {exc}")
 
+    active_zones = [z for z in zones if str(z.status).lower() not in ("broken", "invalidated")]
+    zone_totals = {family: sum(1 for z in active_zones if zone_class(z) == family)
+                   for family in ("DEMAND", "SUPPLY", "RBS", "SBR")}
+    st.markdown(
+        '<div class="section-kicker">ZONE INTELLIGENCE / ACTIVE LEVELS</div>',
+        unsafe_allow_html=True,
+    )
+    z1, z2, z3, z4, z5 = st.columns(5)
+    z1.metric("DEMAND", zone_totals["DEMAND"])
+    z2.metric("SUPPLY", zone_totals["SUPPLY"])
+    z3.metric("RBS · RESISTANCE → SUPPORT", zone_totals["RBS"])
+    z4.metric("SBR · SUPPORT → RESISTANCE", zone_totals["SBR"])
+    z5.metric("ACTIVE ZONES", len(active_zones))
+
     with st.container():
         st.caption(f"ZONE ENGINE · MAJOR SWING FILTER v2 · {len(zones)} zones detected · refresh clears zone cache")
         st.markdown('<div class="small-label">PRICE CHART · TRADINGVIEW-STYLE WORKSPACE</div>',
@@ -362,6 +457,7 @@ if df is not None and not df.empty:
             chart_zones.extend(sorted(
                 side_zones,
                 key=lambda z: (
+                    1 if zone_class(z) in ("RBS", "SBR") else 0,
                     0.55 * float(z.strength) + 0.45 * float(z.score),
                     -abs((float(z.proximal) + float(z.distal)) / 2 - last_price)
                 ),
@@ -416,12 +512,12 @@ if df is not None and not df.empty:
         else:
             st.caption("No recent trade prints returned.")
 
-    lower_tabs = st.tabs(["ZONE WATCHLIST", "TRADE TICKET", "MARKET DATA", "TRADE JOURNAL", "SYSTEM", "ENTRY MODULE", "STRUCTURE & PLANS"])
+    lower_tabs = st.tabs(["ZONE MATRIX", "PAPER TICKET", "MARKET DATA", "JOURNAL", "SYSTEM", "ENTRY SCANNER", "STRUCTURE"])
     with lower_tabs[0]:
-        st.markdown("**Detected supply and demand areas**")
+        st.markdown("**Detected zone matrix · all four zone families**")
         if zones:
             rows = [{
-                "SIDE": z.kind.upper(), "PATTERN": z.pattern, "SOURCE": z.method.upper(),
+                "ZONE TYPE": zone_class(z), "TRADE BIAS": "LONG" if z.kind == "demand" else "SHORT", "PATTERN": z.pattern, "SOURCE": z.method.upper(),
                 "PROXIMAL": round(float(z.proximal), 2), "DISTAL": round(float(z.distal), 2),
                 "STRENGTH": round(float(z.strength), 3),
                 "SCORE": round(float(z.score), 3),
@@ -566,18 +662,22 @@ if df is not None and not df.empty:
             } for item in trade_scenarios]
             st.dataframe(scenario_rows, use_container_width=True, hide_index=True)
         else:
-            st.info("No valid active demand below or supply above the current price. No forced trade plan.")
+            st.info("No valid active demand/RBS below or supply/SBR above the current price. No forced trade plan.")
         st.warning("Research-only conditional levels. Wait for the stated candle-close confirmation; no order is sent.")
 
     with lower_tabs[5]:
-        st.markdown("**15m zone / 3m confirmation / paper signal only**")
-        st.caption("Wait for a 3m tap, then a completed 3m close beyond the zone proximal edge. Entry is the following 3m candle open.")
+        st.markdown("**15M ZONE MATRIX / 3M CONFIRMATION / PAPER SIGNAL ONLY**")
+        st.caption("All four zone families are scanned: Demand and RBS are LONG-side support; Supply and SBR are SHORT-side resistance. Both sides stay eligible. 1H structure is context only, never a directional gate.")
         try:
             candles_15m = fetch_delta_history(symbol=symbol, timeframe="15m", days=16)
             candles_3m = fetch_delta_history(symbol=symbol, timeframe="3m", days=7)
             zones_15m = track_zone_lifecycle(candles_15m, detect_base_leg_zones(candles_15m))
             setups = find_entry_setups(candles_3m, zones_15m, buffer_atr=0.25)
-            st.metric("ATR BUFFER", "0.25 x 3m ATR(14)")
+            e1, e2, e3, e4 = st.columns(4)
+            e1.metric("3M ATR BUFFER", "0.25 × ATR(14)")
+            e2.metric("RBS ZONES", sum(1 for z in zones_15m if zone_class(z) == "RBS" and z.status != "broken"))
+            e3.metric("SBR ZONES", sum(1 for z in zones_15m if zone_class(z) == "SBR" and z.status != "broken"))
+            e4.metric("SETUPS FOUND", len(setups))
             if setups:
                 st.dataframe(pd.DataFrame(setups), use_container_width=True, hide_index=True)
                 st.info("Historical confirmation candidates using the next 3m candle open. Research only; no live orders.")
