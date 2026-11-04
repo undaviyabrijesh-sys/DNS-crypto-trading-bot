@@ -29,3 +29,18 @@ def test_broken_zones_are_ignored():
     demand = zone("demand", 99, 95, "DBR")
     demand.status = "broken"
     assert generate_trade_scenarios(105, [demand]) == []
+
+
+def test_rbs_and_sbr_flip_zones_keep_both_trade_sides_eligible():
+    rbs = zone("demand", 99, 95, "RBS")
+    sbr = zone("supply", 110, 115, "SBR")
+
+    result = generate_trade_scenarios(105, [rbs, sbr])
+
+    assert {item.side for item in result} == {"LONG", "SHORT"}
+    long = next(item for item in result if item.side == "LONG")
+    short = next(item for item in result if item.side == "SHORT")
+    assert long.zone_pattern == "RBS"
+    assert short.zone_pattern == "SBR"
+    assert "RBS support" in long.trigger
+    assert "SBR resistance" in short.trigger
