@@ -67,11 +67,12 @@ def generate_trade_scenarios(
         stop = low - max((high - low) * 0.25, current_price * 0.0005)
         targets = [lo for _, lo, _ in above if lo > entry][:3]
         rr = [_rr(entry, stop, target, "LONG") for target in targets]
+        long_zone_label = "RBS support" if str(zone.pattern).upper() == "RBS" else "demand"
         scenarios.append(TradeScenario(
             "LONG", zone.pattern, low, high, low, high, round(stop, 8),
             targets, rr,
-            "Wait for price to enter demand and a completed-candle bullish rejection/confirmation.",
-            "Invalidate on a completed candle close below demand distal edge.",
+            f"Wait for price to retest {long_zone_label} and a completed-candle bullish rejection/confirmation.",
+            f"Invalidate on a completed candle close below the {long_zone_label} distal edge.",
         ))
 
     if above:
@@ -80,11 +81,12 @@ def generate_trade_scenarios(
         stop = high + max((high - low) * 0.25, current_price * 0.0005)
         targets = [hi for _, _, hi in below if hi < entry][:3]
         rr = [_rr(entry, stop, target, "SHORT") for target in targets]
+        short_zone_label = "SBR resistance" if str(zone.pattern).upper() == "SBR" else "supply"
         scenarios.append(TradeScenario(
             "SHORT", zone.pattern, low, high, low, high, round(stop, 8),
             targets, rr,
-            "Wait for price to enter supply and a completed-candle bearish rejection/confirmation.",
-            "Invalidate on a completed candle close above supply distal edge.",
+            f"Wait for price to retest {short_zone_label} and a completed-candle bearish rejection/confirmation.",
+            f"Invalidate on a completed candle close above the {short_zone_label} distal edge.",
         ))
 
     scenarios.sort(key=lambda s: min(
