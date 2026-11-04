@@ -435,6 +435,15 @@ if df is not None and not df.empty:
     z3.metric("RBS · RESISTANCE → SUPPORT", zone_totals["RBS"])
     z4.metric("SBR · SUPPORT → RESISTANCE", zone_totals["SBR"])
     z5.metric("ACTIVE ZONES", len(active_zones))
+    st.markdown(
+        '<div class="zone-readout">'
+        '<span class="zone-demand">● DEMAND / LONG SUPPORT</span>'
+        '<span class="zone-supply">● SUPPLY / SHORT RESISTANCE</span>'
+        '<span class="zone-rbs">● RBS / RESISTANCE → SUPPORT</span>'
+        '<span class="zone-sbr">● SBR / SUPPORT → RESISTANCE</span>'
+        '</div>',
+        unsafe_allow_html=True,
+    )
 
     with st.container():
         st.caption(f"ZONE ENGINE · BASE/LEG + SWING ORIGINS + RBS/SBR FLIPS · {len(zones)} zones detected")
