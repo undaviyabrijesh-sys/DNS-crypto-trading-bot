@@ -42,7 +42,11 @@ streamlit run app.py
 
 The dashboard fetches public candles from OKX by default. Change the exchange/symbol/timeframe in the sidebar. For Delta Exchange, select the CCXT exchange id only if supported in your installed CCXT version and verify the correct market symbol first.
 
-## Historical backtest\n\nThe GitHub Actions workflow runs a 365-day BTC/USDT 15-minute backtest on changes to the strategy and uploads candle, trade and metrics files as an artifact. It compares strict 3R, balanced 2R and looser 2R filters. Open Actions → DNS historical backtest → Artifacts to inspect the results. The workflow can also be started manually for another CCXT symbol and history length.\n\nThe score is a transparent rule-based ranking, not machine learning or a win-probability estimate. The backtest is a first research pass, not proof of profitability.\n\n## Configuration
+## Optional historical backtest
+
+The DNS historical backtest workflow is manual-only. It is not triggered by normal code pushes. Start it from GitHub Actions when you explicitly want to run a historical research job and inspect its uploaded artifacts. The score is a transparent rule-based ranking, not a machine-learning probability estimate, and a backtest is not proof of profitability.
+
+## Configuration
 Copy `.env.example` to `.env` only if you later add private API access. Never commit API keys. This starter does not read or need API credentials.
 
 ## Safety
