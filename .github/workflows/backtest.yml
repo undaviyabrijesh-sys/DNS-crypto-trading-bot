@@ -1,10 +1,5 @@
 name: DNS historical backtest
 on:
-  push:
-    paths:
-      - "dns_bot/**"
-      - "requirements.txt"
-      - ".github/workflows/backtest.yml"
   workflow_dispatch:
     inputs:
       symbol:
@@ -25,9 +20,6 @@ jobs:
         with:
           python-version: "3.11"
       - run: pip install -r requirements.txt
-      - name: Run BTC backtest
-        if: ${{ github.event_name == 'push' }}
-        run: PYTHONPATH=. python -m dns_bot.backtest --exchange deltaindia --symbol BTCUSD --timeframe 15m --days 365
       - name: Run requested backtest
         if: ${{ github.event_name == 'workflow_dispatch' }}
         run: PYTHONPATH=. python -m dns_bot.backtest --exchange deltaindia --symbol "${{ inputs.symbol }}" --timeframe 15m --days "${{ inputs.days }}"
