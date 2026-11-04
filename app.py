@@ -128,6 +128,12 @@ def get_trades(symbol: str):
     return fetch_recent_trades(symbol)
 
 
+@st.cache_data(ttl=60, show_spinner=False)
+def get_analysis_candles(symbol: str, timeframe: str, days: int):
+    """Cache scanner candles briefly to avoid refetching on every Streamlit rerun."""
+    return fetch_delta_history(symbol=symbol, timeframe=timeframe, days=days)
+
+
 def timeframe_minutes(tf: str) -> int:
     if tf.endswith("m"):
         return int(tf[:-1])
@@ -337,8 +343,8 @@ with st.sidebar:
     candle_count = st.select_slider("CHART HISTORY", options=[250, 500, 750, 1000, 1500, 1999], value=1500)
     st.caption("15m chart: 1,500 candles ≈ 15.6 days")
     zone_engine = "Base / Leg"
-    st.markdown("**SUPPLY / DEMAND: BASE / LEG ONLY**")
-    st.caption("Includes base-leg formations and confirmed swing-candle zones. FVG is disabled.")
+    st.markdown("**ZONE ENGINE: BASE / LEG + FLIPS**")
+    st.caption("DBR/RBR, RBD/DBD, swing origins, plus RBS/SBR after confirmed breaks. FVG is disabled.")
     show_volume = st.toggle("Show volume", value=True)
     refresh = st.button("↻  REFRESH MARKET", use_container_width=True, type="primary")
     st.markdown("---")
@@ -357,7 +363,7 @@ st.markdown(
 st.markdown(
     f'<div class="market-head"><span class="market-symbol">{symbol}</span>'
     f'<span class="market-tag">PERPETUAL</span><span class="market-tag">DELTA INDIA</span>'
-    f'<span class="muted">USD QUOTED</span><span class="muted">1H STRUCTURE / 15M ZONES / 3M CONFIRMATION</span></div>',
+    f'<span class="muted">USD QUOTED</span><span class="muted">1H STRUCTURE CONTEXT / 15M ZONES / 3M CONFIRMATION</span></div>',
     unsafe_allow_html=True,
 )
 
@@ -431,8 +437,8 @@ if df is not None and not df.empty:
     z5.metric("ACTIVE ZONES", len(active_zones))
 
     with st.container():
-        st.caption(f"ZONE ENGINE · MAJOR SWING FILTER v2 · {len(zones)} zones detected · refresh clears zone cache")
-        st.markdown('<div class="small-label">PRICE CHART · TRADINGVIEW-STYLE WORKSPACE</div>',
+        st.caption(f"ZONE ENGINE · BASE/LEG + SWING ORIGINS + RBS/SBR FLIPS · {len(zones)} zones detected")
+        st.markdown('<div class="small-label">PRICE CHART · SALTY TRADES TERMINAL</div>',
                     unsafe_allow_html=True)
         tool1, tool2, tool3, tool4, tool5 = st.columns([1.0, 1.5, 1.0, 1.0, 1.0])
         with tool1:
@@ -669,15 +675,42 @@ if df is not None and not df.empty:
         st.markdown("**15M ZONE MATRIX / 3M CONFIRMATION / PAPER SIGNAL ONLY**")
         st.caption("All four zone families are scanned: Demand and RBS are LONG-side support; Supply and SBR are SHORT-side resistance. Both sides stay eligible. 1H structure is context only, never a directional gate.")
         try:
-            candles_15m = fetch_delta_history(symbol=symbol, timeframe="15m", days=16)
-            candles_3m = fetch_delta_history(symbol=symbol, timeframe="3m", days=7)
+            # Delta history excludes the still-forming candle. Cache these scanner
+            # requests so Streamlit widget interactions do not refetch all timeframes.
+            candles_1h = get_analysis_candles(symbol, "1h", 60)
+            candles_15m = get_analysis_candles(symbol, "15m", 16)
+            candles_3m = get_analysis_candles(symbol, "3m", 7)
             zones_15m = track_zone_lifecycle(candles_15m, detect_base_leg_zones(candles_15m))
             setups = find_entry_setups(candles_3m, zones_15m, buffer_atr=0.25)
-            e1, e2, e3, e4 = st.columns(4)
-            e1.metric("3M ATR BUFFER", "0.25 × ATR(14)")
-            e2.metric("RBS ZONES", sum(1 for z in zones_15m if zone_class(z) == "RBS" and z.status != "broken"))
-            e3.metric("SBR ZONES", sum(1 for z in zones_15m if zone_class(z) == "SBR" and z.status != "broken"))
-            e4.metric("SETUPS FOUND", len(setups))
+
+            # 1H BOS/CHoCH is displayed as context only. It never filters a side.
+            structure_1h = detect_market_structure(candles_1h)
+            latest_bias_event = next(
+                (event for event in reversed(structure_1h)
+                 if event.event in ("BOS", "CHOCH")),
+                None,
+            )
+            bias_direction = latest_bias_event.direction.upper() if latest_bias_event else "NEUTRAL"
+            bias_label = (
+                f"{bias_direction} {latest_bias_event.event}"
+                if latest_bias_event else "NEUTRAL"
+            )
+            for setup in setups:
+                if bias_direction == "NEUTRAL":
+                    setup["1H CONTEXT"] = "NEUTRAL"
+                elif (setup["side"] == "LONG" and bias_direction == "BULLISH") or (
+                    setup["side"] == "SHORT" and bias_direction == "BEARISH"
+                ):
+                    setup["1H CONTEXT"] = "ALIGNED"
+                else:
+                    setup["1H CONTEXT"] = "COUNTERTREND"
+
+            e1, e2, e3, e4, e5 = st.columns(5)
+            e1.metric("1H STRUCTURE", bias_label)
+            e2.metric("3M ATR BUFFER", "0.25 × ATR(14)")
+            e3.metric("RBS ZONES", sum(1 for z in zones_15m if zone_class(z) == "RBS" and z.status != "broken"))
+            e4.metric("SBR ZONES", sum(1 for z in zones_15m if zone_class(z) == "SBR" and z.status != "broken"))
+            e5.metric("SETUPS FOUND", len(setups))
             if setups:
                 st.dataframe(pd.DataFrame(setups), use_container_width=True, hide_index=True)
                 st.info("Historical confirmation candidates using the next 3m candle open. Research only; no live orders.")
