@@ -20,6 +20,7 @@ from dns_bot.delta_market import fetch_ticker, fetch_orderbook, fetch_recent_tra
 from dns_bot.zones import detect_base_leg_zones, track_zone_lifecycle
 from dns_bot.entries import find_entry_setups
 from dns_bot.structure import detect_market_structure
+from dns_bot.mtf import latest_structure_bias, align_setups_to_bias
 from dns_bot.scenarios import generate_trade_scenarios
 from dns_bot.journal import load_trades, learning_report
 
@@ -573,17 +574,32 @@ if df is not None and not df.empty:
         st.markdown("**15m zone / 3m confirmation / paper signal only**")
         st.caption("Wait for a 3m tap, then a completed 3m close beyond the zone proximal edge. Entry is the following 3m candle open.")
         try:
+            candles_1h = fetch_delta_history(symbol=symbol, timeframe="1h", days=30)
             candles_15m = fetch_delta_history(symbol=symbol, timeframe="15m", days=16)
             candles_3m = fetch_delta_history(symbol=symbol, timeframe="3m", days=7)
+            htf_events = detect_market_structure(candles_1h)
+            htf_bias = latest_structure_bias(htf_events)
             zones_15m = track_zone_lifecycle(candles_15m, detect_base_leg_zones(candles_15m))
-            setups = find_entry_setups(candles_3m, zones_15m, buffer_atr=0.25)
+            raw_setups = find_entry_setups(candles_3m, zones_15m, buffer_atr=0.25)
+            setups, filtered_setups = align_setups_to_bias(raw_setups, htf_bias)
+            bias_label = {"bullish": "BULLISH · LONGS ONLY", "bearish": "BEARISH · SHORTS ONLY",
+                          "neutral": "NEUTRAL · NO TRADE"}[htf_bias]
+            b1, b2, b3 = st.columns(3)
+            b1.metric("1H STRUCTURE BIAS", bias_label)
+            b2.metric("ALIGNED CANDIDATES", len(setups))
+            b3.metric("FILTERED OUT", len(filtered_setups))
             st.metric("ATR BUFFER", "0.25 x 3m ATR(14)")
             if setups:
                 st.dataframe(pd.DataFrame(setups), use_container_width=True, hide_index=True)
-                st.info("Historical confirmation candidates using the next 3m candle open. Research only; no live orders.")
+                st.info("Candidates align with the latest confirmed 1H BOS/CHoCH. Entry is the next 3m open after confirmation. Research only.")
+            elif htf_bias == "neutral":
+                st.warning("No confirmed 1H BOS/CHoCH bias. All entry candidates are blocked; NO TRADE.")
             else:
-                st.info("No qualifying tap-and-close confirmation in the loaded candles. No trade is preferable to a forced entry.")
-            st.caption("SL: beyond 15m zone distal edge + ATR buffer. T1: 2R. Runner: nearest opposing 15m zone, only when it offers at least 2R.")
+                st.info("No 3m tap-and-close candidates aligned with the current 1H structure. NO TRADE.")
+            if filtered_setups:
+                with st.expander("Show candidates blocked by 1H structure"):
+                    st.dataframe(pd.DataFrame(filtered_setups), use_container_width=True, hide_index=True)
+            st.caption("Workflow: 1H confirmed BOS/CHoCH bias → 15m supply/demand zone → closed 3m tap/reclaim → next 3m open. SL: beyond 15m zone distal edge + 0.25 × 3m ATR. T1: 2R; opposing-zone runner only when it offers at least 2R.")
         except Exception as exc:
             st.error(f"Entry module data/analysis error: {exc}")
 else:
