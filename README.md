@@ -12,6 +12,14 @@ A deliberately small, testable BTC/ETH demand-and-supply trading desk.
 - Streamlit monitoring dashboard.
 - Paper-only by default. No live order placement is implemented.
 
+## Zone families shown in the terminal
+- Demand zones (DBR / RBR and confirmed swing lows) are LONG-side support candidates.
+- Supply zones (RBD / DBD and confirmed swing highs) are SHORT-side resistance candidates.
+- A broken demand zone can flip to SBR (support becomes resistance).
+- A broken supply zone can flip to RBS (resistance becomes support).
+- RBS and SBR are displayed as separate zone families, start drawing from the break candle, and remain eligible for the retest side implied by the flip.
+- The 1H structure panel is contextual only. It does not block either LONG or SHORT setups.
+
 ## Important strategy conventions
 - FVG demand: candle 3 low > candle 1 high. The zone is candle 1 high-to-low, per your notes.
 - FVG supply: candle 3 high < candle 1 low. The zone is candle 1 high-to-low.
