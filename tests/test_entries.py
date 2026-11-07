@@ -113,3 +113,26 @@ def test_missing_next_entry_candle_prevents_signal():
         rows[index]["timestamp"] += pd.Timedelta(minutes=3)
 
     assert find_entry_setups(pd.DataFrame(rows), [zone()]) == []
+
+
+
+def test_entry_history_requires_both_timeframes_to_be_usable():
+    from dns_bot.entries import entry_history_ready
+
+    good = {"is_usable": True}
+    assert entry_history_ready(good, good) is True
+    assert entry_history_ready(good, {"is_usable": False}) is False
+    assert entry_history_ready({"is_usable": False}, good) is False
+
+
+@pytest.mark.parametrize("bad_quality", [
+    {},
+    {"is_usable": False},
+    {"is_usable": None},
+    None,
+    "usable",
+])
+def test_entry_history_rejects_missing_or_non_true_quality(bad_quality):
+    from dns_bot.entries import entry_history_ready
+
+    assert entry_history_ready({"is_usable": True}, bad_quality) is False

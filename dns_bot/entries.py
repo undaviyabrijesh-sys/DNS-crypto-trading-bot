@@ -4,6 +4,14 @@ import math
 import pandas as pd
 
 
+def entry_history_ready(quality_15m: dict, quality_3m: dict) -> bool:
+    """Allow setup scans only when both source timeframes pass feed-quality gates."""
+    return all(
+        isinstance(quality, dict) and quality.get("is_usable") is True
+        for quality in (quality_15m, quality_3m)
+    )
+
+
 def atr_3m(df: pd.DataFrame, period: int = 14) -> pd.Series:
     prev = df["close"].shift(1)
     tr = pd.concat(

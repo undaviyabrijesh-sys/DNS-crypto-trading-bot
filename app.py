@@ -18,7 +18,7 @@ import streamlit as st
 from dns_bot.delta_data import fetch_delta_history, history_quality
 from dns_bot.delta_market import fetch_ticker, fetch_orderbook, fetch_recent_trades
 from dns_bot.zones import detect_base_leg_zones, track_zone_lifecycle
-from dns_bot.entries import find_entry_setups
+from dns_bot.entries import entry_history_ready, find_entry_setups
 from dns_bot.journal import load_trades, learning_report
 from dns_bot.cache_control import clear_data_caches, clear_market_candles_on_key_change
 
@@ -506,14 +506,24 @@ if df is not None and not df.empty:
                     )
                 if quality["is_stale"] or quality["is_future"]:
                     st.warning(f"{label} entry history is stale or has a future timestamp.")
-            zones_15m = track_zone_lifecycle(candles_15m, detect_base_leg_zones(candles_15m))
-            setups = find_entry_setups(candles_3m, zones_15m, buffer_atr=0.25)
             st.metric("ATR BUFFER", "0.25 x 3m ATR(14)")
-            if setups:
-                st.dataframe(pd.DataFrame(setups), use_container_width=True, hide_index=True)
-                st.info("Historical confirmation candidates using the next 3m candle open. Research only; no live orders.")
+            if entry_history_ready(quality_15m, quality_3m):
+                zones_15m = track_zone_lifecycle(candles_15m, detect_base_leg_zones(candles_15m))
+                setups = find_entry_setups(candles_3m, zones_15m, buffer_atr=0.25)
+                if setups:
+                    st.dataframe(pd.DataFrame(setups), use_container_width=True, hide_index=True)
+                    st.info("Historical confirmation candidates using the next 3m candle open. Research only; no live orders.")
+                else:
+                    st.info("No qualifying tap-and-close confirmation in the loaded candles. No trade is preferable to a forced entry.")
             else:
-                st.info("No qualifying tap-and-close confirmation in the loaded candles. No trade is preferable to a forced entry.")
+                failed = [
+                    label for label, quality in (("15m", quality_15m), ("3m", quality_3m))
+                    if quality.get("is_usable") is not True
+                ]
+                st.warning(
+                    f"Entry scan withheld: {', '.join(failed)} history failed continuity/freshness validation. "
+                    "No candidate is shown until both feeds are usable."
+                )
             st.caption("SL: beyond 15m zone distal edge + ATR buffer. T1: 2R. Runner: nearest opposing 15m zone, only when it offers at least 2R.")
         except Exception as exc:
             st.error(f"Entry module data/analysis error: {exc}")
