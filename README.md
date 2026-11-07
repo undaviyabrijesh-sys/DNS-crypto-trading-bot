@@ -24,7 +24,7 @@ A paper-only BTC/ETH market desk with a Streamlit terminal, public market data, 
 - Base/leg defaults: compact base candles have body/range at most 55%; incoming leg body/range is at least 60%; base length is 1–6 candles; outgoing displacement can span 1–3 candles and must exceed the rolling-median range expansion filter.
 - Confirmed swing-origin zones use the full high-low range of the pivot candle and are only available after the right-side confirmation candles close.
 - Zone lifecycle tracks touches, defended reactions, close-through invalidation, and SBR/RBS flips. A wick through a zone is not, by itself, a close-confirmed break.
-- The 15m/3m entry module uses only a completed 15m zone after its formation/confirmation candle has closed. Demand confirmation requires a later 3m close above the high of the lowest-low touch candle; supply confirmation mirrors this using the highest-high touch candle. Entry is the following 3m open.
+- The 15m/3m entry module uses only a completed 15m zone after its formation/confirmation candle has closed. Demand confirmation requires a later 3m close above the high of the lowest-low touch candle; supply confirmation mirrors this using the highest-high touch candle. Entry is the following 3m open. A missing 3m candle resets the touch sequence, and a missing next bar prevents an entry from being inferred.
 - The entry module places its stop beyond the 15m zone distal boundary with a 0.25 × 3m ATR buffer and calculates a 2R first target. A nearby opposing zone is used as a runner target only when it offers at least 2R.
 - Signals are based on closed candles. In the OHLC backtest, if stop and target are both touched in one candle, stop is assumed first.
 
