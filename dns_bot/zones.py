@@ -63,12 +63,17 @@ def _body_ratio(row: pd.Series) -> float:
 
 def detect_base_leg_zones(df: pd.DataFrame, max_base: int = 6, range_lookback: int = 20,
                           leg_body_ratio: float = 0.60, base_body_ratio: float = 0.55,
-                          expansion: float = 1.25, max_leg_out: int = 3) -> list[Zone]:
+                          expansion: float = 1.25, max_leg_out: int = 3,
+                          only_latest: bool = False) -> list[Zone]:
     """Detect compact-base zones followed by 1-3 candle displacement legs.
 
     Unlike the first version, the outgoing displacement may take several
     candles. This captures larger institutional-style moves that do not leave
     in one oversized candle. Zone bounds remain anchored to the compact base.
+
+    When only_latest is true, inspect only base/leg and swing formations whose
+    confirmation candle is the final input row. This preserves full-scan results
+    for the current candle while avoiding repeated scans of older local zones.
     """
     _valid_ohlc(df)
     if max_base < 1 or max_base > 6:
@@ -82,7 +87,17 @@ def detect_base_leg_zones(df: pd.DataFrame, max_base: int = 6, range_lookback: i
     seen: set[tuple[int, int]] = set()
 
     for base_len in range(1, max_base + 1):
-        for start in range(1, len(df) - base_len - 1):
+        if only_latest:
+            # A current-bar confirmation must end on the final row. Keep the
+            # original start bounds so this fast path is exactly equivalent to
+            # filtering the full detector to zones created on the final row.
+            starts = range(
+                max(1, len(df) - max_leg_out - base_len),
+                len(df) - base_len - 1,
+            )
+        else:
+            starts = range(1, len(df) - base_len - 1)
+        for start in starts:
             end = start + base_len - 1
             if (start, end) in seen:
                 continue
@@ -98,7 +113,8 @@ def detect_base_leg_zones(df: pd.DataFrame, max_base: int = 6, range_lookback: i
             # Find the first qualifying displacement after the base. The
             # displacement can be one strong candle or a coordinated 2-3 bar leg.
             selected = None
-            for horizon in range(1, max_leg_out + 1):
+            horizons = (len(df) - 1 - end,) if only_latest else range(1, max_leg_out + 1)
+            for horizon in horizons:
                 leg_end = end + horizon
                 if leg_end >= len(df):
                     break
@@ -156,7 +172,11 @@ def detect_base_leg_zones(df: pd.DataFrame, max_base: int = 6, range_lookback: i
     # Require a meaningful departure so every tiny pivot is not promoted.
     left_right = 3
     departure_bars = left_right
-    for pivot in range(left_right, len(df) - left_right):
+    if only_latest:
+        pivot_indices = [len(df) - left_right - 1] if len(df) >= 2 * left_right + 1 else []
+    else:
+        pivot_indices = range(left_right, len(df) - left_right)
+    for pivot in pivot_indices:
         row = df.iloc[pivot]
         pivot_high, pivot_low = float(row["high"]), float(row["low"])
         local = df.iloc[pivot - left_right:pivot + left_right + 1]

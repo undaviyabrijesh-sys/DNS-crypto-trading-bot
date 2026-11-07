@@ -159,7 +159,7 @@ def run_backtest(
         # FVG requires three bars; base/leg requires only its local base and
         # rolling-range context. The bounded prefix avoids O(n^2) full-history scans.
         local = data.iloc[max(0, i - 25):i + 1]
-        found = detect_fvg_zones(local.tail(3)) + detect_base_leg_zones(local)
+        found = detect_fvg_zones(local.tail(3)) + detect_base_leg_zones(local, only_latest=True)
         for zone in found:
             key = (zone.kind, zone.method, zone.created_at,
                    round(zone.proximal, 8), round(zone.distal, 8))

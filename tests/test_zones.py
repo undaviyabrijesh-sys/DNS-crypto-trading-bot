@@ -97,3 +97,29 @@ def test_swing_high_uses_full_origin_candle_and_confirmation_time():
     assert swing[0].distal == 121.0
     assert swing[0].created_index == 13
     assert swing[0].created_at == str(rows[13]["timestamp"])
+
+
+def test_latest_only_zone_scan_matches_full_scan_for_current_confirmation():
+    rows = []
+    for i in range(20):
+        price = 100.0 + (0.15 if i % 2 else -0.15)
+        rows.append({
+            "timestamp": pd.Timestamp("2026-01-01", tz="UTC") + pd.Timedelta(minutes=15 * i),
+            "open": price,
+            "high": price + 1.0,
+            "low": price - 1.0,
+            "close": price + (0.1 if i % 2 else -0.1),
+        })
+    rows[10] = {"timestamp": rows[10]["timestamp"], "open": 119.0,
+                "high": 121.0, "low": 118.0, "close": 120.0}
+    for i, close in zip((11, 12, 13), (116.0, 113.0, 110.0)):
+        rows[i] = {"timestamp": rows[i]["timestamp"], "open": close + 1.0,
+                   "high": close + 2.0, "low": close - 1.0, "close": close}
+
+    current_window = pd.DataFrame(rows[:14])
+    full_scan = detect_base_leg_zones(current_window)
+    expected = [zone.to_dict() for zone in full_scan if zone.created_index == len(current_window) - 1]
+    latest_scan = detect_base_leg_zones(current_window, only_latest=True)
+
+    assert [zone.to_dict() for zone in latest_scan] == expected
+    assert any(zone.pattern == "SWING_HIGH" for zone in latest_scan)
