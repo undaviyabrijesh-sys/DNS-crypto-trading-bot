@@ -3,48 +3,49 @@
 ## Repository and branch
 
 - Repository: `undaviyabrijesh-sys/DNS-crypto-trading-bot`
-- Working branch: `salty-trades-desk` only.
-- Latest code/documentation checkpoint before this handoff: [`acb8eba5edb04d7804dcc3b21a423da92a37f75e`](https://github.com/undaviyabrijesh-sys/DNS-crypto-trading-bot/commit/acb8eba5edb04d7804dcc3b21a423da92a37f75e).
-- Do not switch to or modify `main`. No deployment, credentials, private account access, or live order path was added.
+- Working branch: `salty-trades-desk` only. Never modify `main`.
+- Latest code/test checkpoint: [`8b4e7eb1e7430ad0fe8f9a418560df70bf45a6e1`](https://github.com/undaviyabrijesh-sys/DNS-crypto-trading-bot/commit/8b4e7eb1e7430ad0fe8f9a418560df70bf45a6e1).
+- The existing Streamlit `app.py` was improved; no duplicate app was created.
+- Paper/read-only only. No deployment, credentials, private account access or live order path.
 
-## Existing app inspected
+## Existing app and current capability
 
-- Improved the existing `app.py` Streamlit terminal; no duplicate app was created.
-- Existing dark cyberpunk / TradingView-style interface remains: Delta India public candles, ticker, L2 book, recent trades, EMA/volume overlays, base/leg and swing-origin zones, zone watchlist, manual paper ticket, journal, system tab, and 15m-zone / 3m-confirmation entry module.
-- Dashboard symbols are BTCUSD and ETHUSD on Delta Exchange India. `dns_bot/data.py` is a separate public CCXT OHLCV helper (default Binance BTC/USDT); do not mix those price series in a backtest.
-- Dashboard manual trade plans remain Streamlit-session-only. There is not yet a durable cross-session paper-position/outcome ledger or unattended streaming refresh.
+- Dark cyberpunk / TradingView-style terminal remains intact: Delta India public candles, ticker, L2 book, recent trades, EMA/volume overlays, price-bounded supply/demand drawings, zone watchlist, manual paper ticket, journal, system panel and 15m-zone / 3m-confirmation research module.
+- Dashboard instruments are BTCUSD and ETHUSD on Delta Exchange India. `dns_bot/data.py` remains a separate public CCXT helper (default Binance BTC/USDT); do not mix these series in a backtest.
+- Manual trade plans are still Streamlit-session-only. There is no durable cross-session paper-position/outcome ledger or unattended streaming refresh.
 - No hosted app URL or deployment was verified.
 
-## Changes made
+## Changes made in this supervision cycle
 
-1. [`0f61bcad`](https://github.com/undaviyabrijesh-sys/DNS-crypto-trading-bot/commit/0f61bcad5ceeefafbceb608781de9f07614e2c48) — `dns_bot/entries.py`
-   - 15m zones become eligible only after the zone-confirmation candle closes; `created_at` is the candle open timestamp, so the 15m interval is added before scanning 3m bars.
-   - Demand now tracks the lowest-low touch candle and requires a later 3m close above that candle's high. Supply mirrors this with the highest-high touch candle and a later close below its low.
-   - A close through the distal boundary invalidates the setup. Entry remains the next 3m open; the existing distal-zone stop plus ATR buffer and 2R target logic are preserved.
-   - Reject invalid negative/non-finite ATR buffers.
-2. [`b388d734`](https://github.com/undaviyabrijesh-sys/DNS-crypto-trading-bot/commit/b388d734dcf0319f85574808a4a3419bffc08533) — `tests/test_entries.py`
-   - Six regression tests cover long/short touch-candle confirmation, 15m availability timing, distal invalidation, invalid buffer, and same-candle non-confirmation.
-3. [`116ff304`](https://github.com/undaviyabrijesh-sys/DNS-crypto-trading-bot/commit/116ff3042ed08434d68ef6b8d0dc5118439cf6ce) and [`2e4b2658`](https://github.com/undaviyabrijesh-sys/DNS-crypto-trading-bot/commit/2e4b265875c41838193c65dbf0eca0ff3ca32aff) — `dns_bot/cache_control.py` and `tests/test_cache_control.py`
-   - Added a small tested helper to clear Streamlit data caches and reject callables without a `clear()` method.
-4. [`dbb9f188`](https://github.com/undaviyabrijesh-sys/DNS-crypto-trading-bot/commit/dbb9f188bbbdda308b97dacf8f54ace00dc91e9e) — `app.py`
-   - The REFRESH MARKET button now clears ticker, L2 order-book, and recent-trade caches before requesting fresh snapshots. Candle and zone refresh behavior is retained.
-5. [`610fb8e2`](https://github.com/undaviyabrijesh-sys/DNS-crypto-trading-bot/commit/610fb8e28858db152001b6a5a584702f2d2f6ca1) — `README.md`
-   - Corrected the dashboard data-source description (Delta India, not OKX), clarified the separate CCXT helper, documented current zone defaults and causal entry timing, and recorded session-only paper-plan limitations.
+1. Commit [`9fe57a7`](https://github.com/undaviyabrijesh-sys/DNS-crypto-trading-bot/commit/9fe57a7adbd31e1fd43cc842ca273ee384dc6fb7) — `dns_bot/delta_data.py`
+   - Added `history_quality(frame, timeframe, now)`.
+   - Reports internal gap intervals, exact missing-candle count when spacing is an integer multiple, irregular timestamp intervals, latest completed-candle close time, age and stale status.
+   - Does not synthesize/backfill missing candles. Leading/trailing history gaps are not inferred.
+   - Stale threshold is 2.5 bars with a five-minute minimum.
+2. Commit [`b3f853c`](https://github.com/undaviyabrijesh-sys/DNS-crypto-trading-bot/commit/b3f853cb63197135f15b612a110412a5c3a3a00a) — `app.py`
+   - Main chart panel now shows last completed-candle close time, feed age and missing-candle count.
+   - Displays warnings for internal gaps, irregular spacing, stale candles and future timestamps.
+   - 15m/3m entry module also displays feed age/gap diagnostics; the existing causal entry logic remains unchanged.
+3. Commit [`8b4e7eb`](https://github.com/undaviyabrijesh-sys/DNS-crypto-trading-bot/commit/8b4e7eb1e7430ad0fe8f9a418560df70bf45a6e1) — `tests/test_delta_history_quality.py`
+   - Added five deterministic cases: contiguous history, one missing candle, irregular interval spacing, stale latest candle and invalid/empty input.
 
-## Verification and limitations
+## Verification
 
-- Added timestamp ordering/uniqueness checks and 3m continuity guards in [`a18193e`](https://github.com/undaviyabrijesh-sys/DNS-crypto-trading-bot/commit/a18193e87b6e4322765db06d4640a1078f128bb0); a touch sequence resets across a missing 3m candle and no entry is inferred when the next 3m bar is missing.
-- Added two gap-regression tests in [`cbbc65d6`](https://github.com/undaviyabrijesh-sys/DNS-crypto-trading-bot/commit/cbbc65d6cd44c13bf79f5d746124f6aed351dbe8) and documented this guard in [`acb8eba5`](https://github.com/undaviyabrijesh-sys/DNS-crypto-trading-bot/commit/acb8eba5edb04d7804dcc3b21a423da92a37f75e).
-- Local focused tests: `PYTHONPATH=. python -m pytest -q` — **10 passed**.
-- Local syntax compilation: `python -m compileall -q dns_bot tests` — passed.
-- Full Streamlit app import/smoke test was not run locally because this runtime does not have Streamlit or CCXT installed.
-- GitHub workflow `.github/workflows/tests.yml` is configured for push and pull_request and runs `python -m compileall -q app.py dns_bot` plus `PYTHONPATH=. pytest -q`. No push/PR run or combined status was returned for this branch head by the available GitHub check query. Do not claim remote CI passed until the run is visible in Actions.
-- The app remains read-only. No exchange orders, API keys, secrets, deployment, or account access were used.
+- Exact latest code/test head `8b4e7eb`: GitHub Actions [run 42344484220](https://github.com/undaviyabrijesh-sys/DNS-crypto-trading-bot/actions/runs/42344484220) — **success**.
+- Verified steps: `python -m compileall -q app.py dns_bot` — passed; `PYTHONPATH=. pytest -q` — **35 passed**.
+- An earlier push run for the data-helper commit also passed its full test job: [run 42344479263](https://github.com/undaviyabrijesh-sys/DNS-crypto-trading-bot/actions/runs/42344479263).
+- The `DNS historical backtest` workflow [run 42344479282](https://github.com/undaviyabrijesh-sys/DNS-crypto-trading-bot/actions/runs/42344479282), triggered by the data-helper commit, was still in progress at this checkpoint. Do not claim a result until its conclusion/artifacts are inspected.
+- Full Streamlit UI runtime/browser smoke test was not performed. CI proves syntax compilation and unit tests, not a hosted app or live dashboard session.
+- No exchange orders, credentials, secrets, deployment or account access were used.
 
 ## Exact next steps
 
-1. Verify the GitHub Actions test run for the current `salty-trades-desk` head; confirm the full `app.py` compile and complete pytest suite.
+1. Re-check the outstanding DNS historical backtest run and inspect its artifact only if it completes successfully.
 2. Add a durable paper-position ledger and closed-candle TP/SL/TIME lifecycle; do not rely on Streamlit session state for ongoing positions.
-3. Add explicit market-data timestamps/age indicators and consider controlled auto-refresh after preserving API rate limits.
-4. Add feed-gap coverage to the Delta history fetcher and surface candle-age/gap warnings in the dashboard before expanding entry logic.
-5. Keep all work paper-only and continue on `salty-trades-desk` only.
+3. Add a safe, rate-limited refresh policy and keep candle timestamps/gap warnings visible before any entry module expansion.
+4. Add an AppTest/browser smoke test with network calls mocked, so dashboard rendering is verified without touching live accounts.
+5. Preserve the 15m/3m missing-bar continuity guard and keep all trade plans paper-only.
+
+## Safety
+
+No deployment, credentials, private account access, exchange orders, live trading, or changes to `main` were made.
