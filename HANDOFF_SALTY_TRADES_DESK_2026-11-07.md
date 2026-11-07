@@ -50,3 +50,27 @@
 ## Safety
 
 No deployment, credentials, private account access, exchange orders, live trading, or changes to `main` were made.
+
+
+## Supervisor update — 2026-11-07 11:52 IST
+
+### Entry-history fail-closed guard
+
+- Code/test commit [`f0044fd`](https://github.com/undaviyabrijesh-sys/DNS-crypto-trading-bot/commit/f0044fdae49eed4ad93b5e98789af87cbee0300a) changes `dns_bot/entries.py`, `app.py` and `tests/test_entries.py`.
+- Added `entry_history_ready()`. The 15m-zone / 3m-confirmation module now computes candidates only when **both** downloaded histories pass `history_quality(...)["is_usable"]`. A gap, irregular interval, stale close, future timestamp or missing quality flag withholds the entry scan and displays a warning instead of presenting a potentially misleading candidate.
+- No setup, stop, target or threshold was loosened. This is a fail-closed data-quality guard; paper-only status is unchanged.
+- Exact code/test head GitHub Actions [42346580074](https://github.com/undaviyabrijesh-sys/DNS-crypto-trading-bot/actions/runs/42346580074) passed: `python -m compileall -q app.py dns_bot` and **43 pytest tests passed**.
+
+### Backtest state and app limitations
+
+- New BTC 15m / 365-day Delta historical backtest run [42346580075](https://github.com/undaviyabrijesh-sys/DNS-crypto-trading-bot/actions/runs/42346580075) was still running at this checkpoint; no artifact or performance result is available.
+- Earlier runs [42344479282](https://github.com/undaviyabrijesh-sys/DNS-crypto-trading-bot/actions/runs/42344479282) and [42344777460](https://github.com/undaviyabrijesh-sys/DNS-crypto-trading-bot/actions/runs/42344777460) were also still marked in progress, with their BTC backtest steps active and no artifacts. Do not claim their results; inspect for timeout or slow zone-detection execution on the next cycle.
+- The app remains the existing dark cyberpunk / TradingView-style Streamlit terminal. No duplicate app, hosted URL, deployment or browser runtime was created. CI compilation/unit tests do not prove a full interactive Streamlit session.
+- Manual paper plans remain Streamlit-session-only; no durable position ledger or confirmed TP/SL/TIME monitor exists yet.
+
+### Exact next steps
+
+1. Re-check all three backtest runs. If the 30-minute jobs time out, profile `dns_bot/backtest.py` zone detection and optimize only with equivalence tests; do not report backtest metrics from incomplete runs.
+2. Add durable paper-position storage and closed-candle TP/SL/TIME lifecycle with conservative same-candle stop-first handling.
+3. Add a Streamlit AppTest/browser smoke test with public network functions mocked.
+4. Preserve public read-only data, feed-quality warnings, causal 15m/3m confirmation and paper-only controls. Never add order placement or credentials.
