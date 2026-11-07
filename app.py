@@ -15,7 +15,7 @@ import plotly.graph_objects as go
 from plotly.subplots import make_subplots
 import streamlit as st
 
-from dns_bot.delta_data import fetch_delta_history
+from dns_bot.delta_data import fetch_delta_history, history_quality
 from dns_bot.delta_market import fetch_ticker, fetch_orderbook, fetch_recent_trades
 from dns_bot.zones import detect_base_leg_zones, track_zone_lifecycle
 from dns_bot.entries import find_entry_setups
@@ -260,6 +260,26 @@ if df is not None and not df.empty:
     c5.metric("24H VOLUME", f"{float(volume_24h):,.2f}" if volume_24h != "—" else "—")
     c6.metric("CANDLES", f"{len(df):,}")
 
+    feed = history_quality(df, timeframe)
+    last_closed = pd.Timestamp(feed["latest_close_utc"]).strftime("%Y-%m-%d %H:%M:%S UTC")
+    st.caption(
+        f"FEED · last completed candle {last_closed} · age {feed['age_minutes']:.1f}m · "
+        f"{feed['rows']:,} bars · {feed['missing_candles']:,} missing candles"
+    )
+    if feed["has_gaps"]:
+        st.warning(
+            f"Historical candle spacing contains {feed['gap_intervals']} gap interval(s) "
+            f"and {feed['irregular_intervals']} irregular interval(s). Missing bars are not backfilled; "
+            "chart structure may be incomplete."
+        )
+    if feed["is_stale"]:
+        st.warning(
+            f"Latest completed {timeframe} candle is {feed['age_minutes']:.1f} minutes old "
+            f"(stale threshold {feed['stale_after_minutes']:.1f} minutes)."
+        )
+    elif feed["is_future"]:
+        st.warning("Latest completed candle timestamp is unexpectedly in the future; verify the feed clock.")
+
     zones = []
     try:
         zones = get_zones(df, zone_engine)
@@ -464,6 +484,22 @@ if df is not None and not df.empty:
         try:
             candles_15m = fetch_delta_history(symbol=symbol, timeframe="15m", days=16)
             candles_3m = fetch_delta_history(symbol=symbol, timeframe="3m", days=7)
+            quality_15m = history_quality(candles_15m, "15m")
+            quality_3m = history_quality(candles_3m, "3m")
+            for label, quality in (("15m", quality_15m), ("3m", quality_3m)):
+                st.caption(
+                    f"{label} history · {quality['rows']:,} bars · "
+                    f"{quality['missing_candles']:,} missing · latest close age "
+                    f"{quality['age_minutes']:.1f}m"
+                )
+                if quality["has_gaps"]:
+                    st.warning(
+                        f"{label} entry history has {quality['gap_intervals']} gap interval(s) "
+                        f"and {quality['irregular_intervals']} irregular interval(s); "
+                        "gap-crossing confirmations must not be inferred."
+                    )
+                if quality["is_stale"] or quality["is_future"]:
+                    st.warning(f"{label} entry history is stale or has a future timestamp.")
             zones_15m = track_zone_lifecycle(candles_15m, detect_base_leg_zones(candles_15m))
             setups = find_entry_setups(candles_3m, zones_15m, buffer_atr=0.25)
             st.metric("ATR BUFFER", "0.25 x 3m ATR(14)")
