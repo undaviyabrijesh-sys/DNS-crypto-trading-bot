@@ -82,3 +82,64 @@ def _resolution_seconds(resolution: str) -> int:
     if resolution.endswith("w"):
         return int(resolution[:-1]) * 604800
     raise ValueError(f"Unsupported resolution: {resolution}")
+
+def history_quality(frame: pd.DataFrame, timeframe: str, now=None) -> dict:
+    """Summarize internal candle continuity and latest completed-bar age.
+
+    Gap counts describe only intervals between returned candles; missing leading
+    or trailing history is not inferred. Staleness is flagged after 2.5 bars
+    (with a five-minute minimum), and no missing bars are synthesized.
+    """
+    if timeframe not in SUPPORTED_RESOLUTIONS:
+        raise ValueError(f"Unsupported Delta resolution: {timeframe}")
+    if frame is None or frame.empty:
+        raise ValueError("Cannot assess an empty candle history")
+    if "timestamp" not in frame.columns:
+        raise ValueError("Candle history is missing the timestamp column")
+
+    timestamps = pd.to_datetime(frame["timestamp"], utc=True, errors="coerce").dropna()
+    if timestamps.empty:
+        raise ValueError("Candle history has no valid timestamps")
+    timestamps = timestamps.sort_values().drop_duplicates().reset_index(drop=True)
+
+    seconds = _resolution_seconds(timeframe)
+    deltas = timestamps.diff().dropna().dt.total_seconds()
+    gap_intervals = 0
+    missing_candles = 0
+    irregular_intervals = 0
+    for delta in deltas:
+        ratio = float(delta) / seconds
+        if ratio > 1.0 + 1e-6:
+            gap_intervals += 1
+            nearest = round(ratio)
+            if nearest > 1 and abs(ratio - nearest) <= 1e-6:
+                missing_candles += int(nearest - 1)
+            else:
+                irregular_intervals += 1
+        elif ratio < 1.0 - 1e-6:
+            irregular_intervals += 1
+
+    reference = pd.Timestamp.now(tz="UTC") if now is None else pd.Timestamp(now)
+    reference = reference.tz_localize("UTC") if reference.tzinfo is None else reference.tz_convert("UTC")
+    latest_open = timestamps.iloc[-1]
+    latest_close = latest_open + pd.Timedelta(seconds=seconds)
+    age_minutes = (reference - latest_close).total_seconds() / 60.0
+    stale_after_minutes = max(5.0, seconds / 60.0 * 2.5)
+    has_gaps = gap_intervals > 0 or irregular_intervals > 0
+    is_stale = age_minutes > stale_after_minutes
+    is_future = age_minutes < -2.0
+
+    return {
+        "rows": int(len(timestamps)),
+        "gap_intervals": int(gap_intervals),
+        "missing_candles": int(missing_candles),
+        "irregular_intervals": int(irregular_intervals),
+        "has_gaps": bool(has_gaps),
+        "latest_open_utc": latest_open.isoformat(),
+        "latest_close_utc": latest_close.isoformat(),
+        "age_minutes": round(float(age_minutes), 2),
+        "stale_after_minutes": round(float(stale_after_minutes), 2),
+        "is_stale": bool(is_stale),
+        "is_future": bool(is_future),
+        "is_usable": bool(not has_gaps and not is_stale and not is_future),
+    }
