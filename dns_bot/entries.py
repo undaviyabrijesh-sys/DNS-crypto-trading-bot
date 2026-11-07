@@ -40,6 +40,9 @@ def find_entry_setups(
     df["timestamp"] = pd.to_datetime(df["timestamp"], utc=True, errors="coerce")
     if df["timestamp"].isna().any():
         raise ValueError("timestamp values must be valid datetimes")
+    if df["timestamp"].duplicated().any() or not df["timestamp"].is_monotonic_increasing:
+        raise ValueError("timestamps must be unique and increasing")
+    expected_step = pd.Timedelta(minutes=3)
     df["atr"] = atr_3m(df)
     results = []
 
@@ -64,6 +67,10 @@ def find_entry_setups(
         touch_low = None
         touch_high = None
         for i in range(max(14, int(eligible[0])), len(df) - 1):
+            if i > 0 and df.timestamp.iloc[i] - df.timestamp.iloc[i - 1] != expected_step:
+                # Do not carry a touch confirmation across missing 3m candles.
+                touch_idx = None
+                touch_low = touch_high = None
             candle = df.iloc[i]
             candle_low = float(candle.low)
             candle_high = float(candle.high)
@@ -102,6 +109,11 @@ def find_entry_setups(
             if not confirmed:
                 continue
 
+            if df.timestamp.iloc[i + 1] - df.timestamp.iloc[i] != expected_step:
+                # The next-bar entry is not observable when that bar is missing.
+                touch_idx = None
+                touch_low = touch_high = None
+                continue
             entry = float(df.iloc[i + 1].open)
             risk = entry - stop if side == "LONG" else stop - entry
             if risk <= 0:
