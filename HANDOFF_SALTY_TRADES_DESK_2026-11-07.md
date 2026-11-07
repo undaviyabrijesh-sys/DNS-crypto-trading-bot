@@ -4,7 +4,7 @@
 
 - Repository: `undaviyabrijesh-sys/DNS-crypto-trading-bot`
 - Working branch: `salty-trades-desk` only.
-- Code checkpoint before this handoff: [`610fb8e28858db152001b6a5a584702f2d2f6ca1`](https://github.com/undaviyabrijesh-sys/DNS-crypto-trading-bot/commit/610fb8e28858db152001b6a5a584702f2d2f6ca1).
+- Latest code/documentation checkpoint before this handoff: [`acb8eba5edb04d7804dcc3b21a423da92a37f75e`](https://github.com/undaviyabrijesh-sys/DNS-crypto-trading-bot/commit/acb8eba5edb04d7804dcc3b21a423da92a37f75e).
 - Do not switch to or modify `main`. No deployment, credentials, private account access, or live order path was added.
 
 ## Existing app inspected
@@ -33,7 +33,9 @@
 
 ## Verification and limitations
 
-- Local focused tests: `PYTHONPATH=. python -m pytest -q` — **8 passed**.
+- Added timestamp ordering/uniqueness checks and 3m continuity guards in [`a18193e`](https://github.com/undaviyabrijesh-sys/DNS-crypto-trading-bot/commit/a18193e87b6e4322765db06d4640a1078f128bb0); a touch sequence resets across a missing 3m candle and no entry is inferred when the next 3m bar is missing.
+- Added two gap-regression tests in [`cbbc65d6`](https://github.com/undaviyabrijesh-sys/DNS-crypto-trading-bot/commit/cbbc65d6cd44c13bf79f5d746124f6aed351dbe8) and documented this guard in [`acb8eba5`](https://github.com/undaviyabrijesh-sys/DNS-crypto-trading-bot/commit/acb8eba5edb04d7804dcc3b21a423da92a37f75e).
+- Local focused tests: `PYTHONPATH=. python -m pytest -q` — **10 passed**.
 - Local syntax compilation: `python -m compileall -q dns_bot tests` — passed.
 - Full Streamlit app import/smoke test was not run locally because this runtime does not have Streamlit or CCXT installed.
 - GitHub workflow `.github/workflows/tests.yml` is configured for push and pull_request and runs `python -m compileall -q app.py dns_bot` plus `PYTHONPATH=. pytest -q`. No push/PR run or combined status was returned for this branch head by the available GitHub check query. Do not claim remote CI passed until the run is visible in Actions.
@@ -44,5 +46,5 @@
 1. Verify the GitHub Actions test run for the current `salty-trades-desk` head; confirm the full `app.py` compile and complete pytest suite.
 2. Add a durable paper-position ledger and closed-candle TP/SL/TIME lifecycle; do not rely on Streamlit session state for ongoing positions.
 3. Add explicit market-data timestamps/age indicators and consider controlled auto-refresh after preserving API rate limits.
-4. Add tests for missing 3m candle continuity and stale/incomplete Delta history before expanding entry logic.
+4. Add feed-gap coverage to the Delta history fetcher and surface candle-age/gap warnings in the dashboard before expanding entry logic.
 5. Keep all work paper-only and continue on `salty-trades-desk` only.
