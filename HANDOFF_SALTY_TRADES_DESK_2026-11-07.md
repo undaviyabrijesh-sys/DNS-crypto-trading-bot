@@ -74,3 +74,19 @@ No deployment, credentials, private account access, exchange orders, live tradin
 2. Add durable paper-position storage and closed-candle TP/SL/TIME lifecycle with conservative same-candle stop-first handling.
 3. Add a Streamlit AppTest/browser smoke test with public network functions mocked.
 4. Preserve public read-only data, feed-quality warnings, causal 15m/3m confirmation and paper-only controls. Never add order placement or credentials.
+
+
+## Supervisor update — 2026-11-07 11:56 IST
+
+### Backtest performance fix
+
+- Commit [`40b5a5d`](https://github.com/undaviyabrijesh-sys/DNS-crypto-trading-bot/commit/40b5a5ded85af5e079dcda637a4a976624001672) adds an equivalence-tested `only_latest=True` path to `detect_base_leg_zones`. The historical backtest now evaluates only base/leg and swing formations whose confirmation candle is the current final row, instead of rescanning every prior formation in its 26-candle local window on every iteration. The full zone detector used by the Streamlit app is unchanged.
+- Regression test compares the fast path with the full detector filtered to the final confirmation candle, including the swing-origin fixture. No score, touch, entry, stop, target or risk threshold was changed.
+- Exact code/test CI [42346818296](https://github.com/undaviyabr‍ijesh-sys/DNS-crypto-trading-bot/actions/runs/42346818296) passed compilation and **44 pytest tests**.
+
+### Backtest run status at this checkpoint
+
+- Optimized BTCUSD 15m / 365-day run [42346818397](https://github.com/undaviyabr‍ijesh-sys/DNS-crypto-trading-bot/actions/runs/42346818397) is running on `40b5a5d`; no metrics or artifact are available yet.
+- Older pre-optimization run [42346580075](https://github.com/undaviyabr‍ijesh-sys/DNS-crypto-trading-bot/actions/runs/42346580075) is still marked in progress. Earlier run [42344479282](https://github.com/undaviyabr‍ijesh-sys/DNS-crypto-trading-bot/actions/runs/42344479282) was cancelled after its 30-minute backtest step produced no artifact. Run [42344777460](https://github.com/undaviyabr‍ijesh-sys/DNS-crypto-trading-bot/actions/runs/42344777460) is still marked in progress at this checkpoint and is also pre-optimization.
+- Treat all three old/uncompleted runs as having no usable backtest result. Do not quote metrics from them. If the optimized run also approaches the 30-minute limit, profile the remaining active-zone scan before making further algorithm changes.
+- The handoff-only commit that follows this update is separate from the code/test commit. Branch remains `salty-trades-desk`; `main` is untouched. The desk remains read-only and paper-only.
