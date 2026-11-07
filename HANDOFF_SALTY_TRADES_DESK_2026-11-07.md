@@ -99,3 +99,24 @@ No deployment, credentials, private account access, exchange orders, live tradin
 - Pre-optimization run [42346580075](https://github.com/undaviyabrijesh-sys/DNS-crypto-trading-bot/actions/runs/42346580075) is still marked in progress; no output artifact is available.
 - Optimized run [42346818397](https://github.com/undaviyabrijesh-sys/DNS-crypto-trading-bot/actions/runs/42346818397), on code/test commit `40b5a5d`, is still marked in progress. No backtest result is available yet.
 - The full 365-day BTCUSD 15m backtest has therefore not passed end-to-end in this cycle. The 44-test suite and compile check passed, including fast/full zone-detector equivalence. Do not treat test success as backtest success.
+
+
+## Optimized backtest completed — 2026-11-07 12:06 IST
+
+### BTCUSD 15m / 365-day result
+
+- Optimized run [42346818397](https://github.com/undaviyabrijesh-sys/DNS-crypto-trading-bot/actions/runs/42346818397) completed successfully in about 7 minutes. Artifact ID: `13563044434` (`dns-backtest-results`, 30-day retention).
+- Input: 35,039 completed Delta Exchange India BTCUSD 15m candles from 2025-11-07 06:30 UTC to 2026-11-07 06:00 UTC; timestamps were contiguous at 900 seconds.
+- `strict_3R`: 0 trades. `balanced_2R`: 0 trades.
+- `looser_2R` and `imperfect_2R` produced the same 461 trades because both minimum-score thresholds (30 and 25) were below the minimum observed trade score (40); the variants did not create a distinct sample.
+- For the 461-trade sample: win rate 39.05%; net expectancy **-0.1225R/trade**; profit factor 0.677; net total -56.49R; max drawdown -48.56% at 1% risk/trade; max consecutive losses 8; approximately 38.66 trades/month. Average win +0.659R; average loss -0.623R.
+- Exits: 305 TIME (66.2%), 117 stop (25.4%), 39 target (8.5%). Time exits dominate, explaining why nominal 2R targets did not translate into positive expectancy.
+- Costs in this run are configured as 5 bps fee + 2 bps slippage on each side (14 bps round trip on notional). Historical spread, market impact, funding/carry and executable depth are not included. The drawdown is the backtest's compounded 1%-risk metric, not a live account result.
+- The zone-scan fast path therefore solved the 30-minute timeout for this 365-day run without changing the full app detector; it did **not** make the setup profitable. Do not promote this setup or infer a validated edge from one asset/timeframe/year.
+
+### Outstanding run cleanup and next work
+
+- Earlier runs [42344479282](https://github.com/undaviyabrijesh-sys/DNS-crypto-trading-bot/actions/runs/42344479282) and [42344777460](https://github.com/undaviyabrijesh-sys/DNS-crypto-trading-bot/actions/runs/42344777460) were cancelled at the 30-minute limit and have no usable artifacts.
+- Pre-optimization run [42346580075](https://github.com/undaviyabrijesh-sys/DNS-crypto-trading-bot/actions/runs/42346580075) was still marked in progress at the last check; its output is superseded by successful optimized run 42346818397. Do not use it for metrics.
+- Code/test commit [`40b5a5d`](https://github.com/undaviyabrijesh-sys/DNS-crypto-trading-bot/commit/40b5a5ded85af5e079dcda637a4a976624001672) passed compilation and 44 tests; latest handoff commit is separate. Branch remains `salty-trades-desk`, `main` untouched.
+- Next: keep this setup rejected; investigate why strict/balanced filters yield no trades, deduplicate the two lower-score variants in future reporting, then test alternative parameters only with chronological train/validation/OOS and realistic costs. Continue durable paper-position ledger, outcome tracking and Streamlit AppTest work. No live orders or credentials.
