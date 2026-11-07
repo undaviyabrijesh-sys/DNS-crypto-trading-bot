@@ -20,7 +20,7 @@ from dns_bot.delta_market import fetch_ticker, fetch_orderbook, fetch_recent_tra
 from dns_bot.zones import detect_base_leg_zones, track_zone_lifecycle
 from dns_bot.entries import find_entry_setups
 from dns_bot.journal import load_trades, learning_report
-from dns_bot.cache_control import clear_data_caches
+from dns_bot.cache_control import clear_data_caches, clear_market_candles_on_key_change
 
 
 st.set_page_config(page_title="SALTY TRADES | Delta Terminal", page_icon="◈", layout="wide")
@@ -213,7 +213,8 @@ if refresh:
     # The button must bypass short-lived ticker/L2/tape caches as well as candles.
     clear_data_caches(get_ticker, get_book, get_trades)
 
-if refresh or st.session_state.get("market_key") != market_key:
+market_changed = clear_market_candles_on_key_change(st.session_state, market_key)
+if refresh or market_changed:
     # Force the latest zone algorithm to run when the user refreshes the market.
     get_zones.clear()
     st.session_state.pop("market_error", None)
@@ -246,6 +247,11 @@ except Exception as exc:
 
 df = st.session_state.get("market_candles")
 if df is not None and not df.empty:
+    if st.session_state.get("market_error"):
+        st.warning(
+            f"Latest refresh failed; showing previously loaded {symbol} {timeframe} candles: "
+            f"{st.session_state['market_error']}"
+        )
     last_price = float(ticker.get("close", df.close.iloc[-1])) if ticker else float(df.close.iloc[-1])
     change = float(ticker.get("ltp_change_24h", 0) or 0) if ticker else 0.0
     day_high = ticker.get("high", "—") if ticker else "—"
