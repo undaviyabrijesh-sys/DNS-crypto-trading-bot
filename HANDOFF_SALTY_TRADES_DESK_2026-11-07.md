@@ -82,7 +82,7 @@ No deployment, credentials, private account access, exchange orders, live tradin
 
 - Commit [`40b5a5d`](https://github.com/undaviyabrijesh-sys/DNS-crypto-trading-bot/commit/40b5a5ded85af5e079dcda637a4a976624001672) adds an equivalence-tested `only_latest=True` path to `detect_base_leg_zones`. The historical backtest now evaluates only base/leg and swing formations whose confirmation candle is the current final row, instead of rescanning every prior formation in its 26-candle local window on every iteration. The full zone detector used by the Streamlit app is unchanged.
 - Regression test compares the fast path with the full detector filtered to the final confirmation candle, including the swing-origin fixture. No score, touch, entry, stop, target or risk threshold was changed.
-- Exact code/test CI [42346818296](https://github.com/undaviyabr‍ijesh-sys/DNS-crypto-trading-bot/actions/runs/42346818296) passed compilation and **44 pytest tests**.
+- Exact code/test CI [42346818296](https://github.com/undaviyabrijesh-sys/DNS-crypto-trading-bot/actions/runs/42346818296) passed compilation and **44 pytest tests**.
 
 ### Backtest run status at this checkpoint
 
