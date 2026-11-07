@@ -93,3 +93,23 @@ def test_touch_candle_cannot_confirm_itself_above_zone_edge():
     rows[14].update(open=100.0, high=102.0, low=97.0, close=101.5)
 
     assert find_entry_setups(pd.DataFrame(rows), [zone()]) == []
+
+
+def test_missing_3m_candle_resets_touch_confirmation_sequence():
+    rows = candles()
+    rows[14].update(open=100.0, high=102.0, low=97.0, close=99.0)
+    for index in range(15, len(rows)):
+        rows[index]["timestamp"] += pd.Timedelta(minutes=3)
+    rows[15].update(open=99.0, high=103.0, low=101.0, close=102.5)
+
+    assert find_entry_setups(pd.DataFrame(rows), [zone()]) == []
+
+
+def test_missing_next_entry_candle_prevents_signal():
+    rows = candles()
+    rows[14].update(open=100.0, high=102.0, low=97.0, close=99.0)
+    rows[15].update(open=99.0, high=103.0, low=101.0, close=102.5)
+    for index in range(16, len(rows)):
+        rows[index]["timestamp"] += pd.Timedelta(minutes=3)
+
+    assert find_entry_setups(pd.DataFrame(rows), [zone()]) == []
