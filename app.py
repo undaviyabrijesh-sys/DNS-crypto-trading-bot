@@ -20,6 +20,7 @@ from dns_bot.delta_market import fetch_ticker, fetch_orderbook, fetch_recent_tra
 from dns_bot.zones import detect_base_leg_zones, track_zone_lifecycle
 from dns_bot.entries import find_entry_setups
 from dns_bot.journal import load_trades, learning_report
+from dns_bot.cache_control import clear_data_caches
 
 
 st.set_page_config(page_title="SALTY TRADES | Delta Terminal", page_icon="◈", layout="wide")
@@ -208,6 +209,10 @@ st.markdown(
 
 # A changed contract/timeframe always reloads the matching candle series.
 market_key = (symbol, timeframe, candle_count)
+if refresh:
+    # The button must bypass short-lived ticker/L2/tape caches as well as candles.
+    clear_data_caches(get_ticker, get_book, get_trades)
+
 if refresh or st.session_state.get("market_key") != market_key:
     # Force the latest zone algorithm to run when the user refreshes the market.
     get_zones.clear()
