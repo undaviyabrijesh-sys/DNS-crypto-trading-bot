@@ -90,3 +90,12 @@ No deployment, credentials, private account access, exchange orders, live tradin
 - Older pre-optimization run [42346580075](https://github.com/undaviyabrijesh-sys/DNS-crypto-trading-bot/actions/runs/42346580075) is still marked in progress. Earlier run [42344479282](https://github.com/undaviyabrijesh-sys/DNS-crypto-trading-bot/actions/runs/42344479282) was cancelled after its 30-minute backtest step produced no artifact. Run [42344777460](https://github.com/undaviyabrijesh-sys/DNS-crypto-trading-bot/actions/runs/42344777460) is still marked in progress at this checkpoint and is also pre-optimization.
 - Treat all three old/uncompleted runs as having no usable backtest result. Do not quote metrics from them. If the optimized run also approaches the 30-minute limit, profile the remaining active-zone scan before making further algorithm changes.
 - The handoff-only commit that follows this update is separate from the code/test commit. Branch remains `salty-trades-desk`; `main` is untouched. The desk remains read-only and paper-only.
+
+
+## Backtest queue update — 2026-11-07 12:02 IST
+
+- Pre-optimization BTC backtest [42344479282](https://github.com/undaviyabrijesh-sys/DNS-crypto-trading-bot/actions/runs/42344479282) was cancelled at 06:21:51 UTC after approximately 30 minutes with no artifact.
+- Pre-optimization run [42344777460](https://github.com/undaviyabrijesh-sys/DNS-crypto-trading-bot/actions/runs/42344777460) was cancelled at 06:26:15 UTC after approximately 30 minutes with no artifact.
+- Pre-optimization run [42346580075](https://github.com/undaviyabrijesh-sys/DNS-crypto-trading-bot/actions/runs/42346580075) is still marked in progress; no output artifact is available.
+- Optimized run [42346818397](https://github.com/undaviyabrijesh-sys/DNS-crypto-trading-bot/actions/runs/42346818397), on code/test commit `40b5a5d`, is still marked in progress. No backtest result is available yet.
+- The full 365-day BTCUSD 15m backtest has therefore not passed end-to-end in this cycle. The 44-test suite and compile check passed, including fast/full zone-detector equivalence. Do not treat test success as backtest success.
